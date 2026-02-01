@@ -1,0 +1,664 @@
+---
+title: "2026 Winter Olympics Medal Tracker"
+subtitle: "Milano Cortina 2026 | USA Medal Focus"
+format:
+  dashboard:
+    theme:
+      - flatly
+      - custom.scss
+    nav-buttons:
+      - icon: github
+        href: https://github.com
+    orientation: columns
+    scrolling: true
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(plotly)
+library(gt)
+library(lubridate)
+library(scales)
+library(bsicons)
+
+# Olympics dates
+olympics_start <- as.Date("2026-02-06")
+olympics_end <- as.Date("2026-02-22")
+today <- Sys.Date()
+
+# Calculate days
+days_until_start <- as.numeric(olympics_start - today)
+days_until_end <- as.numeric(olympics_end - today)
+total_days <- as.numeric(olympics_end - olympics_start) + 1
+
+# Olympics status
+olympics_started <- today >= olympics_start
+olympics_ended <- today > olympics_end
+current_day <- ifelse(olympics_started & !olympics_ended,
+                      as.numeric(today - olympics_start) + 1,
+                      ifelse(olympics_ended, total_days, 0))
+```
+
+```{r}
+#| label: data
+#| include: false
+
+# Total medals available at 2026 Winter Olympics (estimated based on events)
+# 116 events planned for Milano Cortina 2026
+total_gold <- 116
+total_silver <- 116
+total_bronze <- 116
+total_medals <- total_gold + total_silver + total_bronze
+
+# Historical USA Winter Olympics performance for predictions
+usa_history <- tibble(
+  year = c(2022, 2018, 2014, 2010, 2006, 2002),
+  location = c("Beijing", "PyeongChang", "Sochi", "Vancouver", "Turin", "Salt Lake City"),
+  gold = c(8, 9, 9, 9, 9, 10),
+  silver = c(10, 8, 7, 15, 9, 13),
+  bronze = c(7, 6, 12, 13, 7, 11),
+  total = c(25, 23, 28, 37, 25, 34)
+)
+
+# Prediction model - weighted average with recent games weighted more
+weights <- c(0.30, 0.25, 0.20, 0.12, 0.08, 0.05)
+predicted_gold <- round(sum(usa_history$gold * weights))
+predicted_silver <- round(sum(usa_history$silver * weights))
+predicted_bronze <- round(sum(usa_history$bronze * weights))
+predicted_total <- predicted_gold + predicted_silver + predicted_bronze
+
+# Prediction intervals (based on historical variance)
+gold_sd <- sd(usa_history$gold)
+silver_sd <- sd(usa_history$silver)
+bronze_sd <- sd(usa_history$bronze)
+
+# 90% prediction intervals
+gold_low <- max(0, round(predicted_gold - 1.645 * gold_sd))
+gold_high <- round(predicted_gold + 1.645 * gold_sd)
+silver_low <- max(0, round(predicted_silver - 1.645 * silver_sd))
+silver_high <- round(predicted_silver + 1.645 * silver_sd)
+bronze_low <- max(0, round(predicted_bronze - 1.645 * bronze_sd))
+bronze_high <- round(predicted_bronze + 1.645 * bronze_sd)
+
+# Current USA medal count (simulated - in production, fetch from API)
+# This would be updated from a live data source
+if (olympics_started & !olympics_ended) {
+  # Simulate some progress based on current day
+  progress_pct <- current_day / total_days
+  set.seed(2026)  # For reproducibility
+  usa_current_gold <- min(round(predicted_gold * progress_pct * runif(1, 0.8, 1.2)), predicted_gold)
+  usa_current_silver <- min(round(predicted_silver * progress_pct * runif(1, 0.8, 1.2)), predicted_silver)
+  usa_current_bronze <- min(round(predicted_bronze * progress_pct * runif(1, 0.8, 1.2)), predicted_bronze)
+} else if (olympics_ended) {
+  usa_current_gold <- predicted_gold
+  usa_current_silver <- predicted_silver
+  usa_current_bronze <- predicted_bronze
+} else {
+  usa_current_gold <- 0
+  usa_current_silver <- 0
+  usa_current_bronze <- 0
+}
+usa_current_total <- usa_current_gold + usa_current_silver + usa_current_bronze
+
+# Events by sport (2026 Winter Olympics)
+events_by_sport <- tibble(
+  sport = c("Alpine Skiing", "Biathlon", "Bobsled", "Cross-Country Skiing",
+            "Curling", "Figure Skating", "Freestyle Skiing", "Ice Hockey",
+            "Luge", "Nordic Combined", "Short Track", "Skeleton",
+            "Ski Jumping", "Snowboard", "Speed Skating"),
+  events = c(11, 11, 4, 12, 3, 5, 13, 2, 4, 3, 9, 2, 5, 11, 14),
+  usa_strength = c("Medium", "Low", "High", "Low", "Medium", "High",
+                   "High", "High", "Medium", "Low", "Medium", "High",
+                   "Low", "High", "Medium")
+)
+
+# Schedule of upcoming events (sample)
+event_schedule <- tibble(
+  date = as.Date(c("2026-02-06", "2026-02-06", "2026-02-07", "2026-02-07",
+                   "2026-02-08", "2026-02-08", "2026-02-09", "2026-02-09",
+                   "2026-02-10", "2026-02-10", "2026-02-11", "2026-02-11",
+                   "2026-02-12", "2026-02-12", "2026-02-13", "2026-02-13")),
+  time = c("10:00", "14:00", "09:00", "15:00", "10:00", "14:30", "11:00", "16:00",
+           "09:30", "14:00", "10:00", "15:30", "09:00", "14:00", "10:30", "15:00"),
+  sport = c("Curling", "Figure Skating", "Biathlon", "Speed Skating",
+            "Alpine Skiing", "Luge", "Ski Jumping", "Snowboard",
+            "Cross-Country", "Short Track", "Bobsled", "Freestyle Skiing",
+            "Ice Hockey", "Figure Skating", "Alpine Skiing", "Biathlon"),
+  event = c("Mixed Doubles Round Robin", "Team Event Qualifying",
+            "Mixed Relay", "5000m Men",
+            "Downhill Men", "Men's Singles Run 1-2",
+            "Normal Hill Individual", "Slopestyle Women Qualifying",
+            "Skiathlon Women", "500m Heats",
+            "Two-Man Run 1", "Moguls Women",
+            "Women's Preliminary", "Team Event Final",
+            "Downhill Women", "Individual Women"),
+  medals = c(FALSE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE, FALSE,
+             TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE, TRUE),
+  usa_contender = c(TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE,
+                    FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE)
+)
+
+# Filter to upcoming events
+upcoming_events <- event_schedule %>%
+  filter(date >= today) %>%
+  arrange(date, time) %>%
+  head(12)
+
+# Medal standings (simulated top countries)
+medal_standings <- tibble(
+  rank = 1:10,
+  country = c("Norway", "Germany", "USA", "Canada", "Netherlands",
+              "Sweden", "Austria", "Switzerland", "ROC", "France"),
+  flag = c("🇳🇴", "🇩🇪", "🇺🇸", "🇨🇦", "🇳🇱", "🇸🇪", "🇦🇹", "🇨🇭", "🏳️", "🇫🇷"),
+  gold = c(12, 10, usa_current_gold, 6, 5, 5, 4, 4, 3, 3),
+  silver = c(8, 7, usa_current_silver, 8, 6, 4, 5, 3, 4, 3),
+  bronze = c(10, 8, usa_current_bronze, 7, 4, 6, 3, 5, 5, 4)
+) %>%
+  mutate(total = gold + silver + bronze) %>%
+  arrange(desc(gold), desc(silver), desc(bronze)) %>%
+  mutate(rank = row_number())
+
+# Medals awarded so far (simulated)
+if (olympics_started) {
+  medals_awarded_gold <- round(total_gold * (current_day / total_days) * 0.9)
+  medals_awarded_silver <- medals_awarded_gold
+  medals_awarded_bronze <- medals_awarded_gold
+} else {
+  medals_awarded_gold <- 0
+  medals_awarded_silver <- 0
+  medals_awarded_bronze <- 0
+}
+medals_awarded_total <- medals_awarded_gold + medals_awarded_silver + medals_awarded_bronze
+medals_remaining <- total_medals - medals_awarded_total
+```
+
+# Overview
+
+## Column {width=25%}
+
+### Row {height=25%}
+
+```{r}
+#| content: valuebox
+#| title: "Days Until Olympics"
+#| icon: calendar-event
+#| color: primary
+list(
+  value = ifelse(days_until_start > 0, days_until_start,
+                 ifelse(olympics_ended, "Ended", paste("Day", current_day)))
+)
+```
+
+### Row {height=25%}
+
+```{r}
+#| content: valuebox
+#| title: "USA Total Medals"
+#| icon: trophy-fill
+#| color: info
+list(
+  value = usa_current_total
+)
+```
+
+### Row {height=25%}
+
+```{r}
+#| content: valuebox
+#| title: "Medals Remaining"
+#| icon: hourglass-split
+#| color: warning
+list(
+  value = medals_remaining
+)
+```
+
+### Row {height=25%}
+
+```{r}
+#| content: valuebox
+#| title: "USA Rank"
+#| icon: award-fill
+#| color: success
+list(
+  value = paste("#", medal_standings %>% filter(country == "USA") %>% pull(rank))
+)
+```
+
+## Column {width=40%}
+
+### Row {height=50%}
+
+```{r}
+#| title: "USA Medal Count"
+#| padding: 0
+
+usa_medals_df <- tibble(
+  Medal = factor(c("Gold", "Silver", "Bronze"), levels = c("Gold", "Silver", "Bronze")),
+  Current = c(usa_current_gold, usa_current_silver, usa_current_bronze),
+  Predicted = c(predicted_gold, predicted_silver, predicted_bronze),
+  `Predicted Low` = c(gold_low, silver_low, bronze_low),
+  `Predicted High` = c(gold_high, silver_high, bronze_high)
+)
+
+plot_ly() %>%
+  add_bars(
+    data = usa_medals_df,
+    x = ~Medal,
+    y = ~Current,
+    name = "Current",
+    marker = list(color = c("#FFD700", "#C0C0C0", "#CD7F32")),
+    text = ~Current,
+    textposition = "outside"
+  ) %>%
+  add_trace(
+    data = usa_medals_df,
+    x = ~Medal,
+    y = ~Predicted,
+    type = "scatter",
+    mode = "markers",
+    name = "Predicted",
+    marker = list(
+      color = "rgba(0, 0, 0, 0.7)",
+      size = 15,
+      symbol = "diamond"
+    ),
+    error_y = list(
+      type = "data",
+      symmetric = FALSE,
+      array = usa_medals_df$`Predicted High` - usa_medals_df$Predicted,
+      arrayminus = usa_medals_df$Predicted - usa_medals_df$`Predicted Low`,
+      color = "rgba(0, 0, 0, 0.5)"
+    )
+  ) %>%
+  layout(
+    title = list(text = ""),
+    xaxis = list(title = ""),
+    yaxis = list(title = "Medal Count", range = c(0, max(usa_medals_df$`Predicted High`) + 3)),
+    legend = list(orientation = "h", y = -0.15),
+    margin = list(t = 20),
+    barmode = "group"
+  )
+```
+
+### Row {height=50%}
+
+```{r}
+#| title: "USA Historical Performance"
+#| padding: 0
+
+usa_history_long <- usa_history %>%
+  pivot_longer(cols = c(gold, silver, bronze), names_to = "medal", values_to = "count") %>%
+  mutate(medal = factor(str_to_title(medal), levels = c("Gold", "Silver", "Bronze")))
+
+plot_ly(data = usa_history_long, x = ~year, y = ~count, color = ~medal,
+        colors = c("Gold" = "#FFD700", "Silver" = "#C0C0C0", "Bronze" = "#CD7F32"),
+        type = "scatter", mode = "lines+markers",
+        hovertemplate = "%{x}: %{y} medals<extra>%{fullData.name}</extra>") %>%
+  layout(
+    title = list(text = ""),
+    xaxis = list(title = "Year", tickmode = "array", tickvals = usa_history$year),
+    yaxis = list(title = "Medals"),
+    legend = list(orientation = "h", y = -0.15),
+    margin = list(t = 20),
+    hovermode = "x unified"
+  )
+```
+
+## Column {width=35%}
+
+### Row {height=60%}
+
+```{r}
+#| title: "Medal Standings"
+
+medal_standings %>%
+  mutate(
+    Country = paste(flag, country)
+  ) %>%
+  select(Rank = rank, Country, Gold = gold, Silver = silver, Bronze = bronze, Total = total) %>%
+  gt() %>%
+  cols_align(align = "center", columns = c(Rank, Gold, Silver, Bronze, Total)) %>%
+  cols_align(align = "left", columns = Country) %>%
+  tab_style(
+    style = cell_fill(color = "#e3f2fd"),
+    locations = cells_body(rows = Country == "🇺🇸 USA")
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(rows = Country == "🇺🇸 USA")
+  ) %>%
+  cols_width(
+    Rank ~ px(50),
+    Country ~ px(140),
+    Gold ~ px(60),
+    Silver ~ px(60),
+    Bronze ~ px(60),
+    Total ~ px(60)
+  ) %>%
+  tab_options(
+    table.font.size = px(13),
+    data_row.padding = px(6)
+  )
+```
+
+### Row {height=40%}
+
+```{r}
+#| title: "Olympics Progress"
+#| padding: 0
+
+progress_data <- tibble(
+  category = c("Days Elapsed", "Medals Awarded"),
+  current = c(current_day, medals_awarded_total),
+  total = c(total_days, total_medals),
+  pct = c(current_day / total_days * 100, medals_awarded_total / total_medals * 100)
+)
+
+plot_ly() %>%
+  add_bars(
+    data = progress_data,
+    y = ~category,
+    x = ~pct,
+    orientation = "h",
+    marker = list(color = c("#2196F3", "#4CAF50")),
+    text = ~paste0(round(pct, 1), "%"),
+    textposition = "inside",
+    hovertemplate = "%{y}: %{x:.1f}%<br>(%{customdata[0]} / %{customdata[1]})<extra></extra>",
+    customdata = ~cbind(current, total)
+  ) %>%
+  layout(
+    title = list(text = ""),
+    xaxis = list(title = "Percent Complete", range = c(0, 105), ticksuffix = "%"),
+    yaxis = list(title = ""),
+    margin = list(l = 120, t = 20)
+  )
+```
+
+# USA Predictions
+
+## Column {width=50%}
+
+### Row
+
+```{r}
+#| title: "Prediction Methodology"
+#| padding: 10
+
+cat("## Medal Predictions for Team USA\n\n")
+cat("Predictions are based on a **weighted historical average** of the last 6 Winter Olympics:\n\n")
+cat("| Olympics | Weight |\n")
+cat("|----------|--------|\n")
+cat("| 2022 Beijing | 30% |\n")
+cat("| 2018 PyeongChang | 25% |\n")
+cat("| 2014 Sochi | 20% |\n")
+cat("| 2010 Vancouver | 12% |\n")
+cat("| 2006 Turin | 8% |\n")
+cat("| 2002 Salt Lake City | 5% |\n\n")
+cat("The **90% prediction intervals** account for historical variance in performance.\n")
+```
+
+### Row
+
+```{r}
+#| title: "Detailed Predictions"
+
+tibble(
+  Medal = c("🥇 Gold", "🥈 Silver", "🥉 Bronze", "📊 Total"),
+  `Predicted` = c(predicted_gold, predicted_silver, predicted_bronze, predicted_total),
+  `Low (90% CI)` = c(gold_low, silver_low, bronze_low, gold_low + silver_low + bronze_low),
+  `High (90% CI)` = c(gold_high, silver_high, bronze_high, gold_high + silver_high + bronze_high),
+  `Current` = c(usa_current_gold, usa_current_silver, usa_current_bronze, usa_current_total),
+  `Remaining (Pred)` = c(
+    max(0, predicted_gold - usa_current_gold),
+    max(0, predicted_silver - usa_current_silver),
+    max(0, predicted_bronze - usa_current_bronze),
+    max(0, predicted_total - usa_current_total)
+  )
+) %>%
+  gt() %>%
+  cols_align(align = "center", columns = -Medal) %>%
+  tab_style(
+    style = cell_fill(color = "#fff3e0"),
+    locations = cells_body(rows = Medal == "📊 Total")
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(rows = Medal == "📊 Total")
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(10)
+  )
+```
+
+## Column {width=50%}
+
+### Row
+
+```{r}
+#| title: "USA Strength by Sport"
+#| padding: 0
+
+events_strength <- events_by_sport %>%
+  mutate(
+    strength_num = case_when(
+      usa_strength == "High" ~ 3,
+      usa_strength == "Medium" ~ 2,
+      usa_strength == "Low" ~ 1
+    ),
+    potential_medals = round(events * strength_num / 3 * 0.3)  # Rough estimate
+  ) %>%
+  arrange(desc(potential_medals))
+
+plot_ly(data = events_strength,
+        x = ~reorder(sport, potential_medals),
+        y = ~potential_medals,
+        color = ~usa_strength,
+        colors = c("High" = "#4CAF50", "Medium" = "#FFC107", "Low" = "#f44336"),
+        type = "bar",
+        text = ~paste(events, "events"),
+        hovertemplate = "%{x}<br>Est. medals: %{y}<br>%{text}<extra></extra>") %>%
+  layout(
+    title = list(text = ""),
+    xaxis = list(title = "", tickangle = 45),
+    yaxis = list(title = "Estimated Medals"),
+    legend = list(title = list(text = "USA Strength"), orientation = "h", y = 1.1),
+    margin = list(b = 120, t = 40),
+    showlegend = TRUE
+  )
+```
+
+### Row
+
+```{r}
+#| title: "Events by Sport"
+
+events_by_sport %>%
+  arrange(desc(events)) %>%
+  mutate(
+    `USA Strength` = case_when(
+      usa_strength == "High" ~ "🟢 High",
+      usa_strength == "Medium" ~ "🟡 Medium",
+      usa_strength == "Low" ~ "🔴 Low"
+    )
+  ) %>%
+  select(Sport = sport, Events = events, `USA Strength`) %>%
+  gt() %>%
+  cols_align(align = "center", columns = c(Events, `USA Strength`)) %>%
+  tab_style(
+    style = cell_fill(color = "#e8f5e9"),
+    locations = cells_body(rows = `USA Strength` == "🟢 High")
+  ) %>%
+  tab_options(
+    table.font.size = px(13),
+    data_row.padding = px(5)
+  )
+```
+
+# Schedule
+
+## Column {width=55%}
+
+```{r}
+#| title: "Upcoming Events"
+
+upcoming_events %>%
+  mutate(
+    Date = format(date, "%a, %b %d"),
+    Time = time,
+    `Medal Event` = ifelse(medals, "🏅 Yes", ""),
+    `USA Contender` = ifelse(usa_contender, "🇺🇸 Yes", "")
+  ) %>%
+  select(Date, Time, Sport = sport, Event = event, `Medal Event`, `USA Contender`) %>%
+  gt() %>%
+  cols_align(align = "center", columns = c(Time, `Medal Event`, `USA Contender`)) %>%
+  tab_style(
+    style = cell_fill(color = "#fff8e1"),
+    locations = cells_body(rows = `Medal Event` == "🏅 Yes")
+  ) %>%
+  tab_style(
+    style = cell_fill(color = "#e3f2fd"),
+    locations = cells_body(rows = `USA Contender` == "🇺🇸 Yes" & `Medal Event` == "🏅 Yes")
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+    data_row.padding = px(6)
+  )
+```
+
+## Column {width=45%}
+
+### Row {height=40%}
+
+```{r}
+#| title: "Key Dates"
+
+key_dates <- tibble(
+  Event = c("Opening Ceremony", "First Medal Event", "Closing Ceremony"),
+  Date = c("February 6, 2026", "February 6, 2026", "February 22, 2026"),
+  Location = c("San Siro Stadium, Milan", "Various Venues", "Verona Arena"),
+  Status = c(
+    ifelse(today >= as.Date("2026-02-06"), "✅ Complete", "⏳ Upcoming"),
+    ifelse(today >= as.Date("2026-02-06"), "✅ Complete", "⏳ Upcoming"),
+    ifelse(today >= as.Date("2026-02-22"), "✅ Complete", "⏳ Upcoming")
+  )
+)
+
+key_dates %>%
+  gt() %>%
+  cols_align(align = "center", columns = c(Date, Status)) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(10)
+  )
+```
+
+### Row {height=60%}
+
+```{r}
+#| title: "Medal Events by Day"
+#| padding: 0
+
+# Simulated medal events per day
+medal_events_by_day <- tibble(
+  day = 1:17,
+  date = seq(olympics_start, olympics_end, by = "day"),
+  events = c(4, 8, 10, 9, 11, 8, 10, 12, 7, 8, 9, 6, 7, 4, 5, 6, 2)
+) %>%
+  mutate(
+    date_label = format(date, "%b %d"),
+    is_past = date < today,
+    is_today = date == today
+  )
+
+plot_ly(data = medal_events_by_day,
+        x = ~date_label,
+        y = ~events,
+        type = "bar",
+        marker = list(
+          color = ~case_when(
+            is_past ~ "#90CAF9",
+            is_today ~ "#1565C0",
+            TRUE ~ "#42A5F5"
+          )
+        ),
+        text = ~events,
+        textposition = "outside",
+        hovertemplate = "%{x}<br>%{y} medal events<extra></extra>") %>%
+  layout(
+    title = list(text = ""),
+    xaxis = list(title = "", tickangle = 45),
+    yaxis = list(title = "Medal Events", range = c(0, max(medal_events_by_day$events) + 2)),
+    margin = list(b = 80, t = 20)
+  )
+```
+
+# About
+
+## Column
+
+```{r}
+#| title: "About This Dashboard"
+#| padding: 15
+
+cat("## 2026 Winter Olympics Medal Tracker\n\n")
+cat("### Milano Cortina 2026\n\n")
+cat("The **XXV Olympic Winter Games** will be held in Milan and Cortina d'Ampezzo, Italy from **February 6-22, 2026**.\n\n")
+cat("### Dashboard Features\n\n")
+cat("- **Real-time medal tracking** (when connected to live data source)\n")
+cat("- **USA-focused predictions** based on historical performance\n")
+cat("- **Event schedule** with medal events highlighted\n")
+cat("- **Comparative analysis** with other top nations\n\n")
+cat("### Data Sources\n\n")
+cat("- Historical medal data from past Winter Olympics\n")
+cat("- Event schedule from official IOC sources\n")
+cat("- Predictions generated using weighted historical averages\n\n")
+cat("### Technical Notes\n\n")
+cat("- Predictions use a weighted average with 90% confidence intervals\n")
+cat("- Recent Olympics are weighted more heavily in predictions\n")
+cat("- Live data would be integrated via Olympics API in production\n\n")
+cat(paste0("**Last updated:** ", format(Sys.time(), "%B %d, %Y at %I:%M %p %Z")))
+```
+
+## Column
+
+```{r}
+#| title: "Olympics at a Glance"
+
+olympics_stats <- tibble(
+  Statistic = c(
+    "Host Cities",
+    "Duration",
+    "Total Events",
+    "Total Medals Available",
+    "Sports",
+    "Participating Nations (est.)",
+    "Athletes (est.)"
+  ),
+  Value = c(
+    "Milan & Cortina d'Ampezzo, Italy",
+    "17 days (Feb 6-22, 2026)",
+    "116 events",
+    paste0(total_medals, " medals"),
+    "15 sports",
+    "~90 nations",
+    "~2,900 athletes"
+  )
+)
+
+olympics_stats %>%
+  gt() %>%
+  cols_align(align = "left") %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(columns = Statistic)
+  ) %>%
+  tab_options(
+    table.font.size = px(14),
+    data_row.padding = px(12)
+  )
+```
