@@ -1,0 +1,105 @@
+/*-- scss:defaults --*/
+
+// Olympic colors
+$olympic-blue: #0081C8;
+$olympic-yellow: #FCB131;
+$olympic-black: #000000;
+$olympic-green: #00A651;
+$olympic-red: #EE334E;
+
+// USA colors
+$usa-red: #B22234;
+$usa-blue: #3C3B6E;
+$usa-white: #FFFFFF;
+
+// Theme customization
+$primary: $olympic-blue;
+$secondary: $usa-blue;
+$success: $olympic-green;
+$info: #17a2b8;
+$warning: $olympic-yellow;
+$danger: $olympic-red;
+
+$body-bg: #f8f9fa;
+$body-color: #212529;
+
+$font-family-sans-serif: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+/*-- scss:rules --*/
+
+// Dashboard title styling
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+// Value boxes
+.bslib-value-box {
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+// Card styling
+.card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: none;
+}
+
+.card-header {
+  background-color: $usa-blue;
+  color: white;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+// Table styling for gt tables
+.gt_table {
+  width: 100% !important;
+}
+
+// Custom medal colors for highlighting
+.gold-medal {
+  background-color: #FFD700;
+  color: #000;
+}
+
+.silver-medal {
+  background-color: #C0C0C0;
+  color: #000;
+}
+
+.bronze-medal {
+  background-color: #CD7F32;
+  color: #fff;
+}
+
+// USA highlight
+.usa-highlight {
+  background-color: rgba(60, 59, 110, 0.1);
+  border-left: 4px solid $usa-blue;
+}
+
+// Olympics ring colors as accents
+.ring-blue { color: $olympic-blue; }
+.ring-yellow { color: $olympic-yellow; }
+.ring-black { color: $olympic-black; }
+.ring-green { color: $olympic-green; }
+.ring-red { color: $olympic-red; }
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .bslib-value-box .value-box-value {
+    font-size: 1.5rem;
+  }
+}
+
+// Progress bar styling
+.progress {
+  height: 25px;
+  border-radius: 12px;
+}
+
+.progress-bar {
+  border-radius: 12px;
+}
