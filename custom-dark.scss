@@ -1,0 +1,242 @@
+/*-- scss:defaults --*/
+
+// Olympic colors (same as light theme)
+$olympic-blue: #0081C8;
+$olympic-yellow: #FCB131;
+$olympic-black: #000000;
+$olympic-green: #00A651;
+$olympic-red: #EE334E;
+
+// USA colors
+$usa-red: #B22234;
+$usa-blue: #3C3B6E;
+$usa-white: #FFFFFF;
+
+// Dark theme overrides
+$primary: lighten($olympic-blue, 10%);
+$secondary: lighten($usa-blue, 15%);
+$success: lighten($olympic-green, 10%);
+$info: #3dc1d3;
+$warning: $olympic-yellow;
+$danger: lighten($olympic-red, 10%);
+
+$body-bg: #1a1a2e;
+$body-color: #e0e0e0;
+
+$card-bg: #16213e;
+$card-border-color: #2a2a4a;
+
+$font-family-sans-serif: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+/*-- scss:rules --*/
+
+// Dashboard title styling
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.navbar {
+  background-color: #0f3460 !important;
+  border-bottom: 2px solid $olympic-blue;
+}
+
+// Value boxes
+.bslib-value-box {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+// Card styling
+.card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  border: 1px solid #2a2a4a;
+  background-color: $card-bg;
+}
+
+.card-header {
+  background-color: #0f3460;
+  color: #e0e0e0;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0 !important;
+  border-bottom: 1px solid $olympic-blue;
+}
+
+// Table styling for gt tables in dark mode
+.gt_table {
+  width: 100% !important;
+  background-color: transparent !important;
+  color: #e0e0e0 !important;
+}
+
+.gt_table thead th,
+.gt_table .gt_col_heading {
+  background-color: #0f3460 !important;
+  color: #e0e0e0 !important;
+  border-bottom: 2px solid $olympic-blue !important;
+}
+
+.gt_table tbody td {
+  color: #d0d0d0 !important;
+  border-bottom: 1px solid #2a2a4a !important;
+}
+
+.gt_table tbody tr:hover td {
+  background-color: rgba(15, 52, 96, 0.5) !important;
+}
+
+// Override gt cell fills for dark mode
+.gt_table tbody td[style*="background-color: #e3f2fd"],
+.gt_table tbody td[style*="background-color: #E3F2FD"] {
+  background-color: rgba(0, 129, 200, 0.2) !important;
+}
+
+.gt_table tbody td[style*="background-color: #e8f5e9"],
+.gt_table tbody td[style*="background-color: #E8F5E9"] {
+  background-color: rgba(0, 166, 81, 0.2) !important;
+}
+
+.gt_table tbody td[style*="background-color: #fff8e1"],
+.gt_table tbody td[style*="background-color: #FFF8E1"] {
+  background-color: rgba(252, 177, 49, 0.15) !important;
+}
+
+.gt_table tbody td[style*="background-color: #fff3e0"],
+.gt_table tbody td[style*="background-color: #FFF3E0"] {
+  background-color: rgba(252, 177, 49, 0.2) !important;
+}
+
+.gt_table tbody td[style*="background-color: #ffebee"],
+.gt_table tbody td[style*="background-color: #FFEBEE"] {
+  background-color: rgba(238, 51, 78, 0.15) !important;
+}
+
+// Grand summary rows
+.gt_table .gt_grand_summary_row td {
+  background-color: #0f3460 !important;
+  color: #e0e0e0 !important;
+  font-weight: bold;
+}
+
+// Custom medal colors for highlighting (dark mode variants)
+.gold-medal {
+  background-color: rgba(255, 215, 0, 0.3);
+  color: #FFD700;
+}
+
+.silver-medal {
+  background-color: rgba(192, 192, 192, 0.3);
+  color: #C0C0C0;
+}
+
+.bronze-medal {
+  background-color: rgba(205, 127, 50, 0.3);
+  color: #CD7F32;
+}
+
+// USA highlight (dark mode)
+.usa-highlight {
+  background-color: rgba(0, 129, 200, 0.15);
+  border-left: 4px solid $olympic-blue;
+}
+
+// Olympics ring colors as accents
+.ring-blue { color: lighten($olympic-blue, 15%); }
+.ring-yellow { color: $olympic-yellow; }
+.ring-black { color: #aaa; }
+.ring-green { color: lighten($olympic-green, 15%); }
+.ring-red { color: lighten($olympic-red, 15%); }
+
+// Plotly charts - make backgrounds transparent
+.js-plotly-plot .plotly .main-svg {
+  background: transparent !important;
+}
+
+.js-plotly-plot .plotly .bg {
+  fill: transparent !important;
+}
+
+// Plotly text colors for dark mode
+.js-plotly-plot .plotly .xtick text,
+.js-plotly-plot .plotly .ytick text,
+.js-plotly-plot .plotly .g-xtitle text,
+.js-plotly-plot .plotly .g-ytitle text {
+  fill: #b0b0b0 !important;
+}
+
+.js-plotly-plot .plotly .legend text {
+  fill: #c0c0c0 !important;
+}
+
+.js-plotly-plot .plotly .gtitle {
+  fill: #e0e0e0 !important;
+}
+
+// Plotly gridlines
+.js-plotly-plot .plotly .gridlayer line {
+  stroke: #2a2a4a !important;
+}
+
+.js-plotly-plot .plotly .zerolinelayer line {
+  stroke: #3a3a5a !important;
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .bslib-value-box .value-box-value {
+    font-size: 1.5rem;
+  }
+}
+
+// Progress bar styling
+.progress {
+  height: 25px;
+  border-radius: 12px;
+  background-color: #2a2a4a;
+}
+
+.progress-bar {
+  border-radius: 12px;
+}
+
+// Scrollbar styling for dark mode
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3a3a5a;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4a6a;
+}
+
+// Tab/page navigation
+.navbar-nav .nav-link {
+  color: #b0b0b0 !important;
+  transition: color 0.2s ease;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active {
+  color: #ffffff !important;
+}
+
+// Dashboard sidebar (if present)
+.dashboard-sidebar {
+  background-color: #16213e;
+  border-right: 1px solid #2a2a4a;
+}
+
+// Code blocks
+pre, code {
+  background-color: #0a0a1a !important;
+  color: #e0e0e0;
+}

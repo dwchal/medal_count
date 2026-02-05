@@ -4,8 +4,8 @@ subtitle: "Milano Cortina 2026"
 format:
   dashboard:
     theme:
-      - flatly
-      - custom.scss
+      light: [flatly, custom.scss]
+      dark: [darkly, custom-dark.scss]
     nav-buttons:
       - icon: github
         href: https://github.com
@@ -24,6 +24,16 @@ library(lubridate)
 library(scales)
 library(bsicons)
 library(ggforce)  # For Olympic rings
+library(htmltools)  # For JS integration
+
+# Plotly dark mode compatible layout defaults
+plotly_theme <- list(
+  paper_bgcolor = "rgba(0,0,0,0)",
+  plot_bgcolor = "rgba(0,0,0,0)",
+  font = list(color = "#666"),
+  xaxis = list(gridcolor = "rgba(128,128,128,0.2)", zerolinecolor = "rgba(128,128,128,0.3)"),
+  yaxis = list(gridcolor = "rgba(128,128,128,0.2)", zerolinecolor = "rgba(128,128,128,0.3)")
+)
 
 # Olympics dates
 olympics_start <- as.Date("2026-02-06")
@@ -363,6 +373,76 @@ on_pace_status <- if (olympics_started & !olympics_ended) {
 }
 ```
 
+```{=html}
+<script>
+// Dark mode support for Plotly charts and GT tables
+(function() {
+  function isDarkMode() {
+    return document.documentElement.getAttribute('data-bs-theme') === 'dark' ||
+           document.body.classList.contains('quarto-dark');
+  }
+
+  function getThemeColors() {
+    const dark = isDarkMode();
+    return {
+      fontColor: dark ? '#c0c0c0' : '#444444',
+      gridColor: dark ? 'rgba(128,128,128,0.2)' : 'rgba(128,128,128,0.15)',
+      zerolineColor: dark ? 'rgba(128,128,128,0.3)' : 'rgba(128,128,128,0.2)',
+      legendColor: dark ? '#d0d0d0' : '#444444'
+    };
+  }
+
+  function updatePlotlyCharts() {
+    const colors = getThemeColors();
+    const plots = document.querySelectorAll('.js-plotly-plot');
+
+    plots.forEach(function(plot) {
+      if (plot && plot.data) {
+        try {
+          Plotly.relayout(plot, {
+            'font.color': colors.fontColor,
+            'xaxis.gridcolor': colors.gridColor,
+            'yaxis.gridcolor': colors.gridColor,
+            'xaxis.zerolinecolor': colors.zerolineColor,
+            'yaxis.zerolinecolor': colors.zerolineColor,
+            'legend.font.color': colors.legendColor,
+            'paper_bgcolor': 'rgba(0,0,0,0)',
+            'plot_bgcolor': 'rgba(0,0,0,0)'
+          });
+        } catch(e) {
+          // Chart may not be fully initialized yet
+        }
+      }
+    });
+  }
+
+  // Observe theme changes via data-bs-theme attribute
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      if (mutation.attributeName === 'data-bs-theme' || mutation.attributeName === 'class') {
+        // Small delay to let theme CSS apply first
+        setTimeout(updatePlotlyCharts, 100);
+      }
+    });
+  });
+
+  // Start observing once DOM is ready
+  document.addEventListener('DOMContentLoaded', function() {
+    observer.observe(document.documentElement, { attributes: true });
+    observer.observe(document.body, { attributes: true });
+
+    // Initial update after charts render
+    setTimeout(updatePlotlyCharts, 500);
+  });
+
+  // Also update when page fully loads (charts may render late)
+  window.addEventListener('load', function() {
+    setTimeout(updatePlotlyCharts, 300);
+  });
+})();
+</script>
+```
+
 # Overview
 
 ## Column {width=25%}
@@ -455,7 +535,7 @@ plot_ly() %>%
     mode = "markers",
     name = "Predicted",
     marker = list(
-      color = "rgba(0, 0, 0, 0.7)",
+      color = "#0081C8",
       size = 15,
       symbol = "diamond"
     ),
@@ -464,16 +544,19 @@ plot_ly() %>%
       symmetric = FALSE,
       array = usa_medals_df$`Predicted High` - usa_medals_df$Predicted,
       arrayminus = usa_medals_df$Predicted - usa_medals_df$`Predicted Low`,
-      color = "rgba(0, 0, 0, 0.5)"
+      color = "#0081C8"
     )
   ) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = ""),
-    yaxis = list(title = "Medal Count", range = c(0, max(usa_medals_df$`Predicted High`) + 3)),
+    xaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Medal Count", range = c(0, max(usa_medals_df$`Predicted High`) + 3),
+                 gridcolor = "rgba(128,128,128,0.2)"),
     legend = list(orientation = "h", y = -0.15),
     margin = list(t = 20),
-    barmode = "group"
+    barmode = "group",
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -493,11 +576,14 @@ plot_ly(data = usa_history_long, x = ~year, y = ~count, color = ~medal,
         hovertemplate = "%{x}: %{y} medals<extra>%{fullData.name}</extra>") %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "Year", tickmode = "array", tickvals = usa_history$year),
-    yaxis = list(title = "Medals"),
+    xaxis = list(title = "Year", tickmode = "array", tickvals = usa_history$year,
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Medals", gridcolor = "rgba(128,128,128,0.2)"),
     legend = list(orientation = "h", y = -0.15),
     margin = list(t = 20),
-    hovermode = "x unified"
+    hovermode = "x unified",
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -565,9 +651,12 @@ plot_ly() %>%
   ) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "Percent Complete", range = c(0, 105), ticksuffix = "%"),
-    yaxis = list(title = ""),
-    margin = list(l = 120, t = 20)
+    xaxis = list(title = "Percent Complete", range = c(0, 105), ticksuffix = "%",
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
+    margin = list(l = 120, t = 20),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -657,11 +746,13 @@ plot_ly(data = events_strength,
         hovertemplate = "%{x}<br>Est. medals: %{y}<br>%{text}<extra></extra>") %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "", tickangle = 45),
-    yaxis = list(title = "Estimated Medals"),
+    xaxis = list(title = "", tickangle = 45, gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Estimated Medals", gridcolor = "rgba(128,128,128,0.2)"),
     legend = list(title = list(text = "USA Strength"), orientation = "h", y = 1.1),
     margin = list(b = 120, t = 40),
-    showlegend = TRUE
+    showlegend = TRUE,
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -784,9 +875,12 @@ plot_ly(data = medal_events_by_day,
         hovertemplate = "%{x}<br>%{y} medal events<extra></extra>") %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "", tickangle = 45),
-    yaxis = list(title = "Medal Events", range = c(0, max(medal_events_by_day$events) + 2)),
-    margin = list(b = 80, t = 20)
+    xaxis = list(title = "", tickangle = 45, gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Medal Events", range = c(0, max(medal_events_by_day$events) + 2),
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    margin = list(b = 80, t = 20),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -823,12 +917,14 @@ plot_ly(x = mc_results$total, type = "histogram",
   ) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "Total Medals"),
-    yaxis = list(title = "Frequency (10,000 simulations)"),
+    xaxis = list(title = "Total Medals", gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Frequency (10,000 simulations)", gridcolor = "rgba(128,128,128,0.2)"),
     showlegend = TRUE,
     legend = list(orientation = "h", y = -0.15),
     margin = list(t = 20),
-    bargap = 0.05
+    bargap = 0.05,
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -867,9 +963,13 @@ plot_ly(data = threshold_data,
   layout(
     title = list(text = ""),
     xaxis = list(title = "", categoryorder = "array",
-                 categoryarray = c("20+ medals", "25+ medals", "30+ medals", "35+ medals", "40+ medals")),
-    yaxis = list(title = "Probability (%)", range = c(0, 105)),
-    margin = list(t = 20)
+                 categoryarray = c("20+ medals", "25+ medals", "30+ medals", "35+ medals", "40+ medals"),
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Probability (%)", range = c(0, 105),
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    margin = list(t = 20),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -898,11 +998,13 @@ plot_ly(data = country_predictions %>% head(10),
             text = ~pred_bronze) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "Predicted Medals"),
-    yaxis = list(title = ""),
+    xaxis = list(title = "Predicted Medals", gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
     barmode = "stack",
     legend = list(orientation = "h", y = -0.1),
-    margin = list(l = 100, t = 20)
+    margin = list(l = 100, t = 20),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -929,11 +1031,14 @@ plot_ly(data = medal_timing,
   ) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "", tickangle = 45),
-    yaxis = list(title = "Cumulative Medals", side = "left"),
-    yaxis2 = list(title = "Daily Expected", overlaying = "y", side = "right"),
+    xaxis = list(title = "", tickangle = 45, gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Cumulative Medals", side = "left", gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis2 = list(title = "Daily Expected", overlaying = "y", side = "right",
+                  gridcolor = "rgba(128,128,128,0.2)"),
     legend = list(orientation = "h", y = 1.1),
-    margin = list(b = 80, t = 40)
+    margin = list(b = 80, t = 40),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -1092,11 +1197,13 @@ plot_ly(data = comparison_data,
         textposition = "outside") %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "", tickangle = 45),
-    yaxis = list(title = "Total Medals"),
+    xaxis = list(title = "", tickangle = 45, gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "Total Medals", gridcolor = "rgba(128,128,128,0.2)"),
     barmode = "group",
     legend = list(orientation = "h", y = 1.1),
-    margin = list(b = 100, t = 40)
+    margin = list(b = 100, t = 40),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -1173,11 +1280,14 @@ plot_ly(data = distribution_data,
             text = ~paste0(round(bronze_pct), "%")) %>%
   layout(
     title = list(text = ""),
-    xaxis = list(title = "Percentage of Total Medals", ticksuffix = "%"),
-    yaxis = list(title = ""),
+    xaxis = list(title = "Percentage of Total Medals", ticksuffix = "%",
+                 gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
     barmode = "stack",
     legend = list(orientation = "h", y = -0.15),
-    margin = list(l = 80, t = 20)
+    margin = list(l = 80, t = 20),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor = "rgba(0,0,0,0)"
   )
 ```
 
@@ -1198,7 +1308,8 @@ cat("- **Monte Carlo simulations** (10,000 iterations) for probability estimates
 cat("- **Sport-by-sport predictions** with confidence levels\n")
 cat("- **Pace analysis** comparing current progress to historical trends\n")
 cat("- **Country comparisons** with predicted vs historical performance\n")
-cat("- **Event schedule** with USA medal opportunities highlighted\n\n")
+cat("- **Event schedule** with USA medal opportunities highlighted\n")
+cat("- **Dark mode toggle** for comfortable viewing in any lighting condition\n\n")
 cat("### Predictive Models\n\n")
 cat("1. **Weighted Historical Average**: Recent Olympics weighted more heavily\n")
 cat("2. **Monte Carlo Simulation**: 10,000 simulations for probability distributions\n")
