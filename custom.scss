@@ -94,6 +94,15 @@ $font-family-sans-serif: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif
   }
 }
 
+// Plotly charts - make backgrounds transparent so they adapt to theme
+.js-plotly-plot .plotly .main-svg {
+  background: transparent !important;
+}
+
+.js-plotly-plot .plotly .bg {
+  fill: transparent !important;
+}
+
 // Progress bar styling
 .progress {
   height: 25px;
