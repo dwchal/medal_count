@@ -118,11 +118,11 @@ events_by_sport <- tibble(
   sport = c("Alpine Skiing", "Biathlon", "Bobsled", "Cross-Country Skiing",
             "Curling", "Figure Skating", "Freestyle Skiing", "Ice Hockey",
             "Luge", "Nordic Combined", "Short Track", "Skeleton",
-            "Ski Jumping", "Snowboard", "Speed Skating"),
-  events = c(11, 11, 4, 12, 3, 5, 13, 2, 4, 3, 9, 2, 5, 11, 14),
+            "Ski Jumping", "Ski Mountaineering", "Snowboard", "Speed Skating"),
+  events = c(11, 11, 4, 12, 3, 5, 14, 2, 4, 3, 10, 2, 5, 5, 11, 14),
   usa_strength = c("Medium", "Low", "High", "Low", "Medium", "High",
                    "High", "High", "Medium", "Low", "Medium", "High",
-                   "Low", "High", "Medium")
+                   "Low", "Low", "High", "Medium")
 )
 
 # Schedule of upcoming events (sample)
@@ -424,10 +424,10 @@ winter_records <- tibble(
   ),
   Holder = c(
     "Norway (Beijing 2022)",
-    "Norway (Beijing 2022)",
+    "Norway (PyeongChang 2018)",
     "Norway",
     "Norway",
-    "Kim Yuna (South Korea, 2010)",
+    "Tara Lipinski (USA, 1998)",
     "Ole Einar Bjorndalen (Norway, 2014)",
     "Marit Bjorgen (Norway)",
     "Marit Bjorgen (Cross-Country)",
@@ -439,7 +439,7 @@ winter_records <- tibble(
     "39 medals",
     "148 golds",
     "405 medals",
-    "Age 19",
+    "Age 15",
     "Age 40",
     "15 medals (8G, 4S, 3B)",
     "15 medals",
@@ -466,10 +466,10 @@ usa_milestones <- tibble(
   Detail = c(
     "113 gold medals (through 2022)",
     "330 total medals (through 2022)",
-    "13 golds (Salt Lake City 2002, home advantage)",
+    "10 golds (Salt Lake City 2002, home advantage)",
     "37 medals (Vancouver 2010)",
     "2nd overall (multiple Games)",
-    "Apolo Ohno - 8 medals (2S, 0S, 6B) in Short Track",
+    "Apolo Ohno - 8 medals (2G, 2S, 4B) in Short Track",
     "24 consecutive Winter Games with medals (1924-2022)"
   )
 )
@@ -514,7 +514,7 @@ usa_medal_results <- tibble(
     "2026-02-08", "2026-02-08",
     "2026-02-09", "2026-02-09",
     "2026-02-10", "2026-02-10", "2026-02-10",
-    "2026-02-11",
+    "2026-02-11", "2026-02-11",
     "2026-02-12", "2026-02-12",
     "2026-02-13", "2026-02-13",
     "2026-02-14", "2026-02-14", "2026-02-14",
@@ -522,7 +522,7 @@ usa_medal_results <- tibble(
     "2026-02-16", "2026-02-16",
     "2026-02-17",
     "2026-02-18", "2026-02-18",
-    "2026-02-19",
+    "2026-02-19", "2026-02-19",
     "2026-02-20", "2026-02-20"
   )),
   sport = c(
@@ -530,7 +530,7 @@ usa_medal_results <- tibble(
     "Snowboard", "Freestyle Skiing",
     "Snowboard", "Skeleton",
     "Speed Skating", "Freestyle Skiing", "Alpine Skiing",
-    "Bobsled",
+    "Bobsled", "Cross-Country Skiing",
     "Short Track", "Freestyle Skiing",
     "Freestyle Skiing", "Luge",
     "Snowboard", "Skeleton", "Figure Skating",
@@ -538,7 +538,7 @@ usa_medal_results <- tibble(
     "Bobsled", "Snowboard",
     "Alpine Skiing",
     "Ice Hockey", "Freestyle Skiing",
-    "Speed Skating",
+    "Speed Skating", "Alpine Skiing",
     "Figure Skating", "Ice Hockey"
   ),
   event = c(
@@ -546,31 +546,31 @@ usa_medal_results <- tibble(
     "Slopestyle Men", "Moguls Women",
     "Slopestyle Women", "Men's Skeleton",
     "5000m Men", "Aerials Mixed Team", "Super-G Women",
-    "Two-Man Bobsled",
+    "Two-Man Bobsled", "Sprint Free Women",
     "1000m Women", "Slopestyle Men",
     "Halfpipe Women", "Team Relay",
     "Halfpipe Women", "Women's Skeleton", "Pairs Free Skate",
     "1500m Women",
     "Four-Man Bobsled", "Big Air Men",
     "Slalom Women",
-    "Women's Semifinal", "Halfpipe Men",
-    "Team Pursuit Women",
-    "Women's Free Skate", "Men's Semifinal"
+    "Women's Gold Medal Game", "Halfpipe Men",
+    "Team Pursuit Women", "Giant Slalom Men",
+    "Women's Free Skate", "Men's Gold Medal Game"
   ),
   athlete = c(
     "Team USA", "Andrew Heo",
     "Dusty Henricksen", "Jaelin Kauf",
     "Julia Marino", "Andrew Blaser",
     "Jordan Stolz", "Team USA", "Mikaela Shiffrin",
-    "Frank Del Duca / Charlie Volker",
+    "Frank Del Duca / Charlie Volker", "Jessie Diggins",
     "Kristen Santos-Griswold", "Alex Hall",
-    "Chloe Kim", "Team USA",
+    "Hanna Faulhaber", "Team USA",
     "Chloe Kim", "Katie Uhlaender", "Alexa Knierim / Brandon Frazier",
     "Brittany Bowe",
     "Hunter Church / crew", "Chris Corning",
     "Mikaela Shiffrin",
     "Team USA", "Aaron Blunck",
-    "Team USA",
+    "Team USA", "River Radamus",
     "Isabeau Levito", "Team USA"
   ),
   medal = c(
@@ -578,7 +578,7 @@ usa_medal_results <- tibble(
     "Gold", "Silver",
     "Silver", "Bronze",
     "Gold", "Silver", "Bronze",
-    "Silver",
+    "Silver", "Silver",
     "Gold", "Silver",
     "Gold", "Bronze",
     "Gold", "Bronze", "Silver",
@@ -586,7 +586,7 @@ usa_medal_results <- tibble(
     "Gold", "Bronze",
     "Bronze",
     "Gold", "Silver",
-    "Bronze",
+    "Bronze", "Bronze",
     "Gold", "Silver"
   )
 ) %>%
