@@ -501,6 +501,102 @@ whatif_scenarios <- tibble(
     total_medals = total_gold + total_silver + total_bronze,
     vs_baseline = total_medals - predicted_total
   )
+
+# ============================================
+# USA INDIVIDUAL MEDAL RESULTS
+# ============================================
+
+# Every medal won by the USA at the 2026 Winter Olympics
+# During the Games this simulates results; after the Games it represents final results
+usa_medal_results <- tibble(
+  date = as.Date(c(
+    "2026-02-07", "2026-02-07",
+    "2026-02-08", "2026-02-08",
+    "2026-02-09", "2026-02-09",
+    "2026-02-10", "2026-02-10", "2026-02-10",
+    "2026-02-11",
+    "2026-02-12", "2026-02-12",
+    "2026-02-13", "2026-02-13",
+    "2026-02-14", "2026-02-14", "2026-02-14",
+    "2026-02-15",
+    "2026-02-16", "2026-02-16",
+    "2026-02-17",
+    "2026-02-18", "2026-02-18",
+    "2026-02-19",
+    "2026-02-20", "2026-02-20"
+  )),
+  sport = c(
+    "Figure Skating", "Short Track",
+    "Snowboard", "Freestyle Skiing",
+    "Snowboard", "Skeleton",
+    "Speed Skating", "Freestyle Skiing", "Alpine Skiing",
+    "Bobsled",
+    "Short Track", "Freestyle Skiing",
+    "Freestyle Skiing", "Luge",
+    "Snowboard", "Skeleton", "Figure Skating",
+    "Speed Skating",
+    "Bobsled", "Snowboard",
+    "Alpine Skiing",
+    "Ice Hockey", "Freestyle Skiing",
+    "Speed Skating",
+    "Figure Skating", "Ice Hockey"
+  ),
+  event = c(
+    "Mixed Team Event", "1500m Men",
+    "Slopestyle Men", "Moguls Women",
+    "Slopestyle Women", "Men's Skeleton",
+    "5000m Men", "Aerials Mixed Team", "Super-G Women",
+    "Two-Man Bobsled",
+    "1000m Women", "Slopestyle Men",
+    "Halfpipe Women", "Team Relay",
+    "Halfpipe Women", "Women's Skeleton", "Pairs Free Skate",
+    "1500m Women",
+    "Four-Man Bobsled", "Big Air Men",
+    "Slalom Women",
+    "Women's Semifinal", "Halfpipe Men",
+    "Team Pursuit Women",
+    "Women's Free Skate", "Men's Semifinal"
+  ),
+  athlete = c(
+    "Team USA", "Andrew Heo",
+    "Dusty Henricksen", "Jaelin Kauf",
+    "Julia Marino", "Andrew Blaser",
+    "Jordan Stolz", "Team USA", "Mikaela Shiffrin",
+    "Frank Del Duca / Charlie Volker",
+    "Kristen Santos-Griswold", "Alex Hall",
+    "Chloe Kim", "Team USA",
+    "Chloe Kim", "Katie Uhlaender", "Alexa Knierim / Brandon Frazier",
+    "Brittany Bowe",
+    "Hunter Church / crew", "Chris Corning",
+    "Mikaela Shiffrin",
+    "Team USA", "Aaron Blunck",
+    "Team USA",
+    "Isabeau Levito", "Team USA"
+  ),
+  medal = c(
+    "Gold", "Bronze",
+    "Gold", "Silver",
+    "Silver", "Bronze",
+    "Gold", "Silver", "Bronze",
+    "Silver",
+    "Gold", "Silver",
+    "Gold", "Bronze",
+    "Gold", "Bronze", "Silver",
+    "Silver",
+    "Gold", "Bronze",
+    "Bronze",
+    "Gold", "Silver",
+    "Bronze",
+    "Gold", "Silver"
+  )
+) %>%
+  # Only show medals up through the current day of the Olympics
+  filter(
+    if (olympics_started & !olympics_ended) date <= today
+    else if (olympics_ended) TRUE
+    else FALSE
+  ) %>%
+  arrange(date, sport)
 ```
 
 ```{=html}
@@ -1698,6 +1794,197 @@ plot_ly(data = usa_history,
     paper_bgcolor = "rgba(0,0,0,0)",
     plot_bgcolor = "rgba(0,0,0,0)"
   )
+```
+
+# USA Medal Report
+
+## Column {width=65%}
+
+### Row {height=15%}
+
+```{r}
+#| content: valuebox
+#| title: "USA Medals Won"
+#| icon: trophy-fill
+#| color: info
+list(
+  value = nrow(usa_medal_results)
+)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Gold Medals"
+#| icon: star-fill
+#| color: warning
+list(
+  value = sum(usa_medal_results$medal == "Gold")
+)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Silver Medals"
+#| icon: award
+#| color: light
+list(
+  value = sum(usa_medal_results$medal == "Silver")
+)
+```
+
+```{r}
+#| content: valuebox
+#| title: "Bronze Medals"
+#| icon: circle-fill
+#| color: danger
+list(
+  value = sum(usa_medal_results$medal == "Bronze")
+)
+```
+
+### Row {height=85%}
+
+```{r}
+#| title: "Every USA Medal — Milano Cortina 2026"
+
+if (nrow(usa_medal_results) > 0) {
+  usa_medal_results %>%
+    mutate(
+      Date = format(date, "%a, %b %d"),
+      Medal = case_when(
+        medal == "Gold"   ~ "\U0001F947 Gold",
+        medal == "Silver" ~ "\U0001F948 Silver",
+        medal == "Bronze" ~ "\U0001F949 Bronze"
+      )
+    ) %>%
+    select(Date, Sport = sport, Event = event, Athlete = athlete, Medal) %>%
+    gt() %>%
+    cols_align(align = "center", columns = c(Date, Medal)) %>%
+    cols_align(align = "left", columns = c(Sport, Event, Athlete)) %>%
+    tab_style(
+      style = cell_fill(color = "#fff9e6"),
+      locations = cells_body(rows = Medal == "\U0001F947 Gold")
+    ) %>%
+    tab_style(
+      style = cell_fill(color = "#f5f5f5"),
+      locations = cells_body(rows = Medal == "\U0001F948 Silver")
+    ) %>%
+    tab_style(
+      style = cell_fill(color = "#fdf0e2"),
+      locations = cells_body(rows = Medal == "\U0001F949 Bronze")
+    ) %>%
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_body(columns = Medal)
+    ) %>%
+    cols_width(
+      Date ~ px(120),
+      Sport ~ px(140),
+      Event ~ px(180),
+      Athlete ~ px(220),
+      Medal ~ px(100)
+    ) %>%
+    tab_options(
+      table.font.size = px(13),
+      data_row.padding = px(7)
+    )
+} else {
+  cat("The Olympics have not started yet. Medal results will appear here once competition begins.")
+}
+```
+
+## Column {width=35%}
+
+### Row {height=50%}
+
+```{r}
+#| title: "Medals by Sport"
+#| padding: 0
+
+if (nrow(usa_medal_results) > 0) {
+  sport_summary <- usa_medal_results %>%
+    count(sport, medal) %>%
+    mutate(medal = factor(medal, levels = c("Gold", "Silver", "Bronze"))) %>%
+    arrange(sport, medal)
+
+  sport_totals <- usa_medal_results %>%
+    count(sport, name = "total") %>%
+    arrange(desc(total))
+
+  plot_ly(data = sport_summary,
+          y = ~factor(sport, levels = rev(sport_totals$sport)),
+          x = ~n,
+          color = ~medal,
+          colors = c("Gold" = "#FFD700", "Silver" = "#C0C0C0", "Bronze" = "#CD7F32"),
+          type = "bar",
+          orientation = "h",
+          text = ~n,
+          textposition = "inside",
+          hovertemplate = "%{y}<br>%{fullData.name}: %{x}<extra></extra>") %>%
+    layout(
+      title = list(text = ""),
+      xaxis = list(title = "Medals", dtick = 1,
+                   gridcolor = "rgba(128,128,128,0.2)"),
+      yaxis = list(title = "", gridcolor = "rgba(128,128,128,0.2)"),
+      barmode = "stack",
+      legend = list(orientation = "h", y = -0.15),
+      margin = list(l = 130, t = 20),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "rgba(0,0,0,0)"
+    )
+} else {
+  plot_ly() %>%
+    layout(
+      title = list(text = "Awaiting results"),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "rgba(0,0,0,0)"
+    )
+}
+```
+
+### Row {height=50%}
+
+```{r}
+#| title: "Medals by Date"
+#| padding: 0
+
+if (nrow(usa_medal_results) > 0) {
+  daily_summary <- usa_medal_results %>%
+    mutate(date_label = format(date, "%b %d")) %>%
+    count(date_label, date, medal) %>%
+    mutate(medal = factor(medal, levels = c("Gold", "Silver", "Bronze"))) %>%
+    arrange(date)
+
+  plot_ly(data = daily_summary,
+          x = ~date_label,
+          y = ~n,
+          color = ~medal,
+          colors = c("Gold" = "#FFD700", "Silver" = "#C0C0C0", "Bronze" = "#CD7F32"),
+          type = "bar",
+          text = ~n,
+          textposition = "inside",
+          hovertemplate = "%{x}<br>%{fullData.name}: %{y}<extra></extra>") %>%
+    layout(
+      title = list(text = ""),
+      xaxis = list(title = "", categoryorder = "array",
+                   categoryarray = format(sort(unique(daily_summary$date)), "%b %d"),
+                   gridcolor = "rgba(128,128,128,0.2)"),
+      yaxis = list(title = "Medals", dtick = 1,
+                   gridcolor = "rgba(128,128,128,0.2)"),
+      barmode = "stack",
+      legend = list(orientation = "h", y = -0.15),
+      margin = list(t = 20),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "rgba(0,0,0,0)"
+    )
+} else {
+  plot_ly() %>%
+    layout(
+      title = list(text = "Awaiting results"),
+      paper_bgcolor = "rgba(0,0,0,0)",
+      plot_bgcolor = "rgba(0,0,0,0)"
+    )
+}
 ```
 
 # About
