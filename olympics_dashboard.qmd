@@ -24,6 +24,8 @@ library(lubridate)
 library(scales)
 library(bsicons)
 library(htmltools)  # For JS integration
+library(httr)
+library(jsonlite)
 
 # Plotly dark mode compatible layout defaults
 plotly_theme <- list(
@@ -55,6 +57,30 @@ current_day <- ifelse(olympics_started & !olympics_ended,
 ```{r}
 #| label: data
 #| include: false
+
+# Live data helpers
+fetch_json <- function(url) {
+  response <- tryCatch(httr::GET(url), error = function(e) NULL)
+  if (is.null(response) || httr::http_error(response)) {
+    return(NULL)
+  }
+  payload <- httr::content(response, as = "text", encoding = "UTF-8")
+  if (!nzchar(payload)) {
+    return(NULL)
+  }
+  tryCatch(jsonlite::fromJSON(payload, flatten = TRUE), error = function(e) NULL)
+}
+
+extract_field <- function(df, candidates) {
+  for (field in candidates) {
+    if (field %in% names(df)) {
+      return(df[[field]])
+    }
+  }
+  NULL
+}
+
+olympics_api_base <- "https://www.olympics.com/OG2026/odata"
 
 # Total medals available at 2026 Winter Olympics (estimated based on events)
 # 116 events planned for Milano Cortina 2026
@@ -93,15 +119,62 @@ silver_high <- round(predicted_silver + 1.645 * silver_sd)
 bronze_low <- max(0, round(predicted_bronze - 1.645 * bronze_sd))
 bronze_high <- round(predicted_bronze + 1.645 * bronze_sd)
 
-# Current USA medal count (simulated - in production, fetch from API)
-# This would be updated from a live data source
+medal_standings_live <- NULL
+medal_api <- fetch_json(paste0(olympics_api_base, "/MedalStandings"))
+if (!is.null(medal_api) && "value" %in% names(medal_api)) {
+  medal_raw <- as_tibble(medal_api$value)
+  country_field <- extract_field(medal_raw, c("Country", "NOC", "Organisation", "Org", "country"))
+  rank_field <- extract_field(medal_raw, c("Rank", "rank", "Position", "Pos"))
+  gold_field <- extract_field(medal_raw, c("Gold", "GoldMedals", "gold"))
+  silver_field <- extract_field(medal_raw, c("Silver", "SilverMedals", "silver"))
+  bronze_field <- extract_field(medal_raw, c("Bronze", "BronzeMedals", "bronze"))
+  total_field <- extract_field(medal_raw, c("Total", "TotalMedals", "total"))
+  if (!is.null(country_field) && !is.null(gold_field) && !is.null(silver_field) &&
+      !is.null(bronze_field) && !is.null(total_field)) {
+    medal_standings_live <- tibble(
+      rank = if (is.null(rank_field)) NA_integer_ else as.integer(rank_field),
+      country = as.character(country_field),
+      gold = as.integer(gold_field),
+      silver = as.integer(silver_field),
+      bronze = as.integer(bronze_field),
+      total = as.integer(total_field)
+    ) %>%
+      mutate(
+        flag = case_when(
+          country %in% c("USA", "United States", "United States of America") ~ "🇺🇸",
+          country %in% c("Norway", "NOR") ~ "🇳🇴",
+          country %in% c("Germany", "GER") ~ "🇩🇪",
+          country %in% c("Canada", "CAN") ~ "🇨🇦",
+          country %in% c("Netherlands", "NED") ~ "🇳🇱",
+          country %in% c("Sweden", "SWE") ~ "🇸🇪",
+          country %in% c("Austria", "AUT") ~ "🇦🇹",
+          country %in% c("Switzerland", "SUI") ~ "🇨🇭",
+          country %in% c("Italy", "ITA") ~ "🇮🇹",
+          country %in% c("France", "FRA") ~ "🇫🇷",
+          TRUE ~ ""
+        )
+      )
+  }
+}
+
+usa_live <- medal_standings_live %>%
+  filter(country %in% c("USA", "United States", "United States of America")) %>%
+  slice(1)
+
+# Current USA medal count (live API when available, otherwise simulated placeholder)
 if (olympics_started & !olympics_ended) {
-  # Simulate some progress based on current day
-  progress_pct <- current_day / total_days
-  set.seed(2026)  # For reproducibility
-  usa_current_gold <- min(round(predicted_gold * progress_pct * runif(1, 0.8, 1.2)), predicted_gold)
-  usa_current_silver <- min(round(predicted_silver * progress_pct * runif(1, 0.8, 1.2)), predicted_silver)
-  usa_current_bronze <- min(round(predicted_bronze * progress_pct * runif(1, 0.8, 1.2)), predicted_bronze)
+  if (nrow(usa_live) > 0) {
+    usa_current_gold <- usa_live$gold
+    usa_current_silver <- usa_live$silver
+    usa_current_bronze <- usa_live$bronze
+  } else {
+    # Simulate some progress based on current day
+    progress_pct <- current_day / total_days
+    set.seed(2026)  # For reproducibility
+    usa_current_gold <- min(round(predicted_gold * progress_pct * runif(1, 0.8, 1.2)), predicted_gold)
+    usa_current_silver <- min(round(predicted_silver * progress_pct * runif(1, 0.8, 1.2)), predicted_silver)
+    usa_current_bronze <- min(round(predicted_bronze * progress_pct * runif(1, 0.8, 1.2)), predicted_bronze)
+  }
 } else if (olympics_ended) {
   usa_current_gold <- predicted_gold
   usa_current_silver <- predicted_silver
@@ -125,7 +198,7 @@ events_by_sport <- tibble(
                    "Low", "Low", "High", "Medium")
 )
 
-# Schedule of upcoming events (sample)
+# Schedule of upcoming events (sample placeholder)
 event_schedule <- tibble(
   date = as.Date(c("2026-02-06", "2026-02-06", "2026-02-07", "2026-02-07",
                    "2026-02-08", "2026-02-08", "2026-02-09", "2026-02-09",
@@ -157,9 +230,17 @@ upcoming_events <- event_schedule %>%
   arrange(date, time) %>%
   head(12)
 
-# Medal standings (simulated top countries)
-# Before Olympics start, all countries have 0 medals
-if (olympics_started) {
+# Medal standings (live when available, otherwise simulated)
+if (!is.null(medal_standings_live)) {
+  medal_standings <- medal_standings_live %>%
+    mutate(
+      rank = ifelse(is.na(rank), row_number(), rank),
+      total = ifelse(is.na(total), gold + silver + bronze, total)
+    ) %>%
+    arrange(rank, desc(total), desc(gold), desc(silver)) %>%
+    select(rank, country, flag, gold, silver, bronze, total) %>%
+    slice_head(n = 10)
+} else if (olympics_started) {
   # During/after Olympics - show simulated progress
   standings_progress_pct <- current_day / total_days
   set.seed(2026)
@@ -2015,9 +2096,9 @@ cat("2. **Monte Carlo Simulation**: 10,000 simulations for probability distribut
 cat("3. **Linear Trend Model**: Regression on historical medal counts\n")
 cat("4. **Sport-Specific Model**: Per-event probabilities based on USA strength\n\n")
 cat("### Data Sources\n\n")
-cat("- Historical medal data from 2002-2022 Winter Olympics\n")
-cat("- Event schedule from official IOC/Milano Cortina 2026 sources\n")
-cat("- Country strength ratings based on recent World Cup/Championship results\n\n")
+cat("- Historical medal data (2002-2022 Winter Olympics) is entered manually for demo purposes\n")
+cat("- Medal standings attempt to load from the olympics.com live API when available\n")
+cat("- Event schedule and sport strength ratings are simulated placeholders until official feeds are published\n\n")
 cat(paste0("**Last updated:** ", format(Sys.time(), "%B %d, %Y at %I:%M %p %Z")))
 ```
 
