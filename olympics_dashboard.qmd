@@ -119,7 +119,15 @@ silver_high <- round(predicted_silver + 1.645 * silver_sd)
 bronze_low <- max(0, round(predicted_bronze - 1.645 * bronze_sd))
 bronze_high <- round(predicted_bronze + 1.645 * bronze_sd)
 
-medal_standings_live <- NULL
+medal_standings_live <- tibble(
+  rank = integer(),
+  country = character(),
+  gold = integer(),
+  silver = integer(),
+  bronze = integer(),
+  total = integer(),
+  flag = character()
+)
 medal_api <- fetch_json(paste0(olympics_api_base, "/MedalStandings"))
 if (!is.null(medal_api) && "value" %in% names(medal_api)) {
   medal_raw <- as_tibble(medal_api$value)
