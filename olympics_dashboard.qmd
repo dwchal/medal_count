@@ -94,8 +94,8 @@ usa_history <- tibble(
   year = c(2022, 2018, 2014, 2010, 2006, 2002),
   location = c("Beijing", "PyeongChang", "Sochi", "Vancouver", "Turin", "Salt Lake City"),
   gold = c(8, 9, 9, 9, 9, 10),
-  silver = c(10, 8, 7, 15, 9, 13),
-  bronze = c(7, 6, 12, 13, 7, 11),
+  silver = c(10, 8, 9, 15, 9, 13),
+  bronze = c(7, 6, 10, 13, 7, 11),
   total = c(25, 23, 28, 37, 25, 34)
 )
 
@@ -474,12 +474,12 @@ country_efficiency <- tibble(
            "\U0001F1E6\U0001F1F9", "\U0001F1E8\U0001F1ED", "\U0001F1EE\U0001F1F9",
            "\U0001F1EB\U0001F1F7", "\U0001F1E8\U0001F1F3", "\U0001F1EF\U0001F1F5",
            "\U0001F1F0\U0001F1F7"),
-  population_m = c(5.5, 84.5, 335, 40, 17.8,
+  population_m = c(5.65, 84.0, 349, 40.1, 17.8,
                    10.5, 9.1, 8.9, 59, 68,
                    1412, 124, 52),
-  gdp_b = c(580, 4430, 28780, 2140, 1090,
-            590, 515, 870, 2190, 2920,
-            17790, 4230, 1710),
+  gdp_b = c(530, 5000, 31800, 2280, 1090,
+            620, 530, 930, 2300, 3050,
+            18500, 4400, 1800),
   pred_total = c(38, 30, predicted_total, 28, 21,
                  22, 21, 19, 16, 16,
                  15, 15, 12),
@@ -2130,7 +2130,7 @@ olympics_stats <- tibble(
     "17 days (Feb 6-22, 2026)",
     "116 events",
     paste0(total_medals, " medals"),
-    "15 sports",
+    "8 sports, 16 disciplines",
     "~90 nations",
     "~2,900 athletes"
   )
