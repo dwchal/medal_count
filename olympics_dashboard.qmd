@@ -85,6 +85,74 @@ fetch_json_any <- function(urls) {
   NULL
 }
 
+# Fallback: scrape medal table from CBS Sports when the official API is unavailable
+fetch_medal_table_web <- function() {
+  url <- "https://www.cbssports.com/olympics/news/2026-winter-olympics-medal-count/"
+  response <- tryCatch(
+    httr::GET(url, httr::timeout(15),
+              httr::add_headers(
+                `User-Agent` = paste0("Mozilla/5.0 (X11; Linux x86_64) ",
+                                      "AppleWebKit/537.36 (KHTML, like Gecko) ",
+                                      "Chrome/120.0.0.0 Safari/537.36")
+              )),
+    error = function(e) NULL
+  )
+  if (is.null(response) || httr::http_error(response)) return(NULL)
+  html <- httr::content(response, as = "text", encoding = "UTF-8")
+
+  # Extract all <tr> body rows from the medal table
+  rows <- regmatches(html,
+    gregexpr('<tr class="TableBase-bodyTr">[\\s\\S]*?</tr>', html, perl = TRUE))[[1]]
+  if (length(rows) == 0) return(NULL)
+
+  result <- lapply(seq_along(rows), function(i) {
+    row <- rows[[i]]
+    # Extract 3-letter NOC code
+    noc_m <- regexec('name--mobile">\\s*\\n?\\s*([A-Z]+)\\s*\\n?\\s*</span>', row, perl = TRUE)
+    noc_v <- regmatches(row, noc_m)[[1]]
+    if (length(noc_v) < 2) return(NULL)
+    noc <- trimws(noc_v[2])
+
+    # Extract the four numeric <td> values: gold, silver, bronze, total
+    td_hits <- regmatches(row,
+      gregexpr('<td class="TableBase-bodyTd">(\\d+)</td>', row, perl = TRUE))[[1]]
+    nums <- as.integer(gsub('.*>(\\d+)<.*', '\\1', td_hits))
+    if (length(nums) < 4) return(NULL)
+
+    list(rank = i, country = noc,
+         gold = nums[1], silver = nums[2], bronze = nums[3], total = nums[4])
+  })
+  result <- Filter(Negate(is.null), result)
+  if (length(result) == 0) return(NULL)
+
+  tibble(
+    rank    = as.integer(sapply(result, `[[`, "rank")),
+    country = sapply(result, `[[`, "country"),
+    gold    = as.integer(sapply(result, `[[`, "gold")),
+    silver  = as.integer(sapply(result, `[[`, "silver")),
+    bronze  = as.integer(sapply(result, `[[`, "bronze")),
+    total   = as.integer(sapply(result, `[[`, "total"))
+  ) %>%
+    mutate(
+      flag = case_when(
+        country == "USA" ~ "🇺🇸",
+        country == "NOR" ~ "🇳🇴",
+        country == "GER" ~ "🇩🇪",
+        country == "CAN" ~ "🇨🇦",
+        country == "NED" ~ "🇳🇱",
+        country == "SWE" ~ "🇸🇪",
+        country == "AUT" ~ "🇦🇹",
+        country == "SUI" ~ "🇨🇭",
+        country == "ITA" ~ "🇮🇹",
+        country == "FRA" ~ "🇫🇷",
+        country == "CHN" ~ "🇨🇳",
+        country == "JPN" ~ "🇯🇵",
+        country == "KOR" ~ "🇰🇷",
+        TRUE ~ ""
+      )
+    )
+}
+
 extract_field <- function(df, candidates) {
   for (field in candidates) {
     if (field %in% names(df)) {
@@ -198,6 +266,10 @@ parse_medal_api <- function(api_result) {
 }
 
 parsed <- parse_medal_api(medal_api)
+# If the official API is unavailable, fall back to scraping CBS Sports
+if (is.null(parsed)) {
+  parsed <- fetch_medal_table_web()
+}
 if (!is.null(parsed)) {
   medal_standings_live <- parsed
 }
