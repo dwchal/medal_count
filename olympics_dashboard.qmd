@@ -1940,7 +1940,7 @@ plot_ly(data = usa_history,
 #| icon: trophy-fill
 #| color: info
 list(
-  value = nrow(usa_medal_results)
+  value = if (nrow(usa_medal_results) > 0) nrow(usa_medal_results) else usa_current_total
 )
 ```
 
@@ -1950,7 +1950,7 @@ list(
 #| icon: star-fill
 #| color: warning
 list(
-  value = sum(usa_medal_results$medal == "Gold")
+  value = if (nrow(usa_medal_results) > 0) sum(usa_medal_results$medal == "Gold") else usa_current_gold
 )
 ```
 
@@ -1960,7 +1960,7 @@ list(
 #| icon: award
 #| color: light
 list(
-  value = sum(usa_medal_results$medal == "Silver")
+  value = if (nrow(usa_medal_results) > 0) sum(usa_medal_results$medal == "Silver") else usa_current_silver
 )
 ```
 
@@ -1970,7 +1970,7 @@ list(
 #| icon: circle-fill
 #| color: danger
 list(
-  value = sum(usa_medal_results$medal == "Bronze")
+  value = if (nrow(usa_medal_results) > 0) sum(usa_medal_results$medal == "Bronze") else usa_current_bronze
 )
 ```
 
