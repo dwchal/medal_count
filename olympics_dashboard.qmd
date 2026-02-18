@@ -60,7 +60,12 @@ current_day <- ifelse(olympics_started & !olympics_ended,
 
 # Live data helpers
 fetch_json <- function(url) {
-  response <- tryCatch(httr::GET(url), error = function(e) NULL)
+  response <- tryCatch(
+    httr::GET(url, httr::timeout(10),
+              httr::add_headers(`User-Agent` = "Mozilla/5.0",
+                                `Accept` = "application/json")),
+    error = function(e) NULL
+  )
   if (is.null(response) || httr::http_error(response)) {
     return(NULL)
   }
@@ -69,6 +74,15 @@ fetch_json <- function(url) {
     return(NULL)
   }
   tryCatch(jsonlite::fromJSON(payload, flatten = TRUE), error = function(e) NULL)
+}
+
+# Try multiple endpoints in order, returning first successful result
+fetch_json_any <- function(urls) {
+  for (url in urls) {
+    result <- fetch_json(url)
+    if (!is.null(result)) return(result)
+  }
+  NULL
 }
 
 extract_field <- function(df, candidates) {
@@ -80,7 +94,13 @@ extract_field <- function(df, candidates) {
   NULL
 }
 
+# Try multiple known endpoint patterns for the 2026 Winter Olympics
 olympics_api_base <- "https://www.olympics.com/OG2026/odata"
+olympics_api_bases <- c(
+  "https://www.olympics.com/OG2026/odata",
+  "https://api.olympics.com/OG2026/odata",
+  "https://sph-s-api.olympics.com/winter/OG2026/odata"
+)
 
 # Total medals available at 2026 Winter Olympics (estimated based on events)
 # 116 events planned for Milano Cortina 2026
@@ -128,71 +148,77 @@ medal_standings_live <- tibble(
   total = integer(),
   flag = character()
 )
-medal_api <- fetch_json(paste0(olympics_api_base, "/MedalStandings"))
-if (!is.null(medal_api) && "value" %in% names(medal_api)) {
-  medal_raw <- as_tibble(medal_api$value)
-  country_field <- extract_field(medal_raw, c("Country", "NOC", "Organisation", "Org", "country"))
-  rank_field <- extract_field(medal_raw, c("Rank", "rank", "Position", "Pos"))
-  gold_field <- extract_field(medal_raw, c("Gold", "GoldMedals", "gold"))
-  silver_field <- extract_field(medal_raw, c("Silver", "SilverMedals", "silver"))
-  bronze_field <- extract_field(medal_raw, c("Bronze", "BronzeMedals", "bronze"))
-  total_field <- extract_field(medal_raw, c("Total", "TotalMedals", "total"))
-  if (!is.null(country_field) && !is.null(gold_field) && !is.null(silver_field) &&
-      !is.null(bronze_field) && !is.null(total_field)) {
-    medal_standings_live <- tibble(
-      rank = if (is.null(rank_field)) NA_integer_ else as.integer(rank_field),
-      country = as.character(country_field),
-      gold = as.integer(gold_field),
-      silver = as.integer(silver_field),
-      bronze = as.integer(bronze_field),
-      total = as.integer(total_field)
-    ) %>%
-      mutate(
-        flag = case_when(
-          country %in% c("USA", "United States", "United States of America") ~ "🇺🇸",
-          country %in% c("Norway", "NOR") ~ "🇳🇴",
-          country %in% c("Germany", "GER") ~ "🇩🇪",
-          country %in% c("Canada", "CAN") ~ "🇨🇦",
-          country %in% c("Netherlands", "NED") ~ "🇳🇱",
-          country %in% c("Sweden", "SWE") ~ "🇸🇪",
-          country %in% c("Austria", "AUT") ~ "🇦🇹",
-          country %in% c("Switzerland", "SUI") ~ "🇨🇭",
-          country %in% c("Italy", "ITA") ~ "🇮🇹",
-          country %in% c("France", "FRA") ~ "🇫🇷",
-          TRUE ~ ""
-        )
-      )
+
+# Try multiple medal standings endpoints
+medal_api <- fetch_json_any(paste0(olympics_api_bases, "/MedalStandings"))
+
+parse_medal_api <- function(api_result) {
+  if (is.null(api_result)) return(NULL)
+  # Handle OData-style response with "value" key
+  raw <- if ("value" %in% names(api_result)) as_tibble(api_result$value)
+         else if (is.data.frame(api_result)) as_tibble(api_result)
+         else NULL
+  if (is.null(raw) || nrow(raw) == 0) return(NULL)
+  country_field <- extract_field(raw, c("Country", "NOC", "Organisation", "Org", "country", "CountryCode"))
+  rank_field    <- extract_field(raw, c("Rank", "rank", "Position", "Pos"))
+  gold_field    <- extract_field(raw, c("Gold", "GoldMedals", "gold", "G"))
+  silver_field  <- extract_field(raw, c("Silver", "SilverMedals", "silver", "S"))
+  bronze_field  <- extract_field(raw, c("Bronze", "BronzeMedals", "bronze", "B"))
+  total_field   <- extract_field(raw, c("Total", "TotalMedals", "total", "T"))
+  if (is.null(country_field) || is.null(gold_field) || is.null(silver_field) || is.null(bronze_field)) {
+    return(NULL)
   }
+  tibble(
+    rank   = if (is.null(rank_field)) NA_integer_ else as.integer(rank_field),
+    country = as.character(country_field),
+    gold   = as.integer(gold_field),
+    silver = as.integer(silver_field),
+    bronze = as.integer(bronze_field),
+    total  = if (is.null(total_field)) as.integer(gold_field) + as.integer(silver_field) + as.integer(bronze_field)
+             else as.integer(total_field)
+  ) %>%
+    mutate(
+      flag = case_when(
+        country %in% c("USA", "United States", "United States of America", "US") ~ "🇺🇸",
+        country %in% c("Norway", "NOR") ~ "🇳🇴",
+        country %in% c("Germany", "GER") ~ "🇩🇪",
+        country %in% c("Canada", "CAN") ~ "🇨🇦",
+        country %in% c("Netherlands", "NED") ~ "🇳🇱",
+        country %in% c("Sweden", "SWE") ~ "🇸🇪",
+        country %in% c("Austria", "AUT") ~ "🇦🇹",
+        country %in% c("Switzerland", "SUI") ~ "🇨🇭",
+        country %in% c("Italy", "ITA") ~ "🇮🇹",
+        country %in% c("France", "FRA") ~ "🇫🇷",
+        country %in% c("China", "CHN") ~ "🇨🇳",
+        country %in% c("Japan", "JPN") ~ "🇯🇵",
+        country %in% c("South Korea", "Korea", "KOR") ~ "🇰🇷",
+        TRUE ~ ""
+      )
+    )
+}
+
+parsed <- parse_medal_api(medal_api)
+if (!is.null(parsed)) {
+  medal_standings_live <- parsed
 }
 
 usa_live <- medal_standings_live %>%
-  filter(country %in% c("USA", "United States", "United States of America")) %>%
+  filter(country %in% c("USA", "United States", "United States of America", "US")) %>%
   slice(1)
 
-# Current USA medal count (live API when available, otherwise simulated placeholder)
-if (olympics_started & !olympics_ended) {
-  if (nrow(usa_live) > 0) {
-    usa_current_gold <- usa_live$gold
-    usa_current_silver <- usa_live$silver
-    usa_current_bronze <- usa_live$bronze
-  } else {
-    # Simulate some progress based on current day
-    progress_pct <- current_day / total_days
-    set.seed(2026)  # For reproducibility
-    usa_current_gold <- min(round(predicted_gold * progress_pct * runif(1, 0.8, 1.2)), predicted_gold)
-    usa_current_silver <- min(round(predicted_silver * progress_pct * runif(1, 0.8, 1.2)), predicted_silver)
-    usa_current_bronze <- min(round(predicted_bronze * progress_pct * runif(1, 0.8, 1.2)), predicted_bronze)
-  }
-} else if (olympics_ended) {
-  usa_current_gold <- predicted_gold
-  usa_current_silver <- predicted_silver
-  usa_current_bronze <- predicted_bronze
+# Current USA medal count: use live API data when available, otherwise 0 (unknown)
+if (nrow(usa_live) > 0) {
+  usa_current_gold <- usa_live$gold
+  usa_current_silver <- usa_live$silver
+  usa_current_bronze <- usa_live$bronze
 } else {
-  usa_current_gold <- 0
-  usa_current_silver <- 0
-  usa_current_bronze <- 0
+  # No live data available — do not simulate; show 0 during Olympics, NA otherwise
+  usa_current_gold <- 0L
+  usa_current_silver <- 0L
+  usa_current_bronze <- 0L
 }
 usa_current_total <- usa_current_gold + usa_current_silver + usa_current_bronze
+api_data_available <- nrow(medal_standings_live) > 0
 
 # Events by sport (2026 Winter Olympics)
 events_by_sport <- tibble(
@@ -206,31 +232,40 @@ events_by_sport <- tibble(
                    "Low", "Low", "High", "Medium")
 )
 
-# Schedule of upcoming events (sample placeholder)
+# Fetch live event schedule from the Olympics API
 event_schedule <- tibble(
-  date = as.Date(c("2026-02-06", "2026-02-06", "2026-02-07", "2026-02-07",
-                   "2026-02-08", "2026-02-08", "2026-02-09", "2026-02-09",
-                   "2026-02-10", "2026-02-10", "2026-02-11", "2026-02-11",
-                   "2026-02-12", "2026-02-12", "2026-02-13", "2026-02-13")),
-  time = c("10:00", "14:00", "09:00", "15:00", "10:00", "14:30", "11:00", "16:00",
-           "09:30", "14:00", "10:00", "15:30", "09:00", "14:00", "10:30", "15:00"),
-  sport = c("Curling", "Figure Skating", "Biathlon", "Speed Skating",
-            "Alpine Skiing", "Luge", "Ski Jumping", "Snowboard",
-            "Cross-Country Skiing", "Short Track", "Bobsled", "Freestyle Skiing",
-            "Ice Hockey", "Figure Skating", "Alpine Skiing", "Biathlon"),
-  event = c("Mixed Doubles Round Robin", "Team Event Qualifying",
-            "Mixed Relay", "5000m Men",
-            "Downhill Men", "Men's Singles Run 1-2",
-            "Normal Hill Individual", "Slopestyle Women Qualifying",
-            "Skiathlon Women", "500m Heats",
-            "Two-Man Run 1", "Moguls Women",
-            "Women's Preliminary", "Team Event Final",
-            "Downhill Women", "Individual Women"),
-  medals = c(FALSE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE, FALSE,
-             TRUE, FALSE, FALSE, TRUE, FALSE, TRUE, TRUE, TRUE),
-  usa_contender = c(TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE,
-                    FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE)
+  date = as.Date(character()),
+  time = character(),
+  sport = character(),
+  event = character(),
+  medals = logical(),
+  usa_contender = logical()
 )
+
+schedule_api <- fetch_json_any(paste0(olympics_api_bases, "/Schedule"))
+if (!is.null(schedule_api)) {
+  sched_raw <- if ("value" %in% names(schedule_api)) as_tibble(schedule_api$value)
+               else if (is.data.frame(schedule_api)) as_tibble(schedule_api)
+               else NULL
+  if (!is.null(sched_raw) && nrow(sched_raw) > 0) {
+    date_field  <- extract_field(sched_raw, c("Date", "StartDate", "EventDate", "date"))
+    time_field  <- extract_field(sched_raw, c("Time", "StartTime", "time"))
+    sport_field <- extract_field(sched_raw, c("Sport", "SportName", "Discipline", "sport"))
+    event_field <- extract_field(sched_raw, c("Event", "EventName", "Name", "event"))
+    medal_field <- extract_field(sched_raw, c("Medal", "IsMedal", "MedalEvent", "medals"))
+    usa_field   <- extract_field(sched_raw, c("USAContender", "UsaEntry", "usa_contender"))
+    if (!is.null(date_field) && !is.null(sport_field)) {
+      event_schedule <- tibble(
+        date          = as.Date(substr(as.character(date_field), 1, 10)),
+        time          = if (is.null(time_field)) NA_character_ else as.character(time_field),
+        sport         = as.character(sport_field),
+        event         = if (is.null(event_field)) NA_character_ else as.character(event_field),
+        medals        = if (is.null(medal_field)) NA else as.logical(medal_field),
+        usa_contender = if (is.null(usa_field)) NA else as.logical(usa_field)
+      ) %>% filter(!is.na(date))
+    }
+  }
+}
 
 # Filter to upcoming events
 upcoming_events <- event_schedule %>%
@@ -238,8 +273,8 @@ upcoming_events <- event_schedule %>%
   arrange(date, time) %>%
   head(12)
 
-# Medal standings (live when available, otherwise simulated)
-if (!is.null(medal_standings_live)) {
+# Medal standings: use live API data when available, otherwise empty (no fake simulation)
+if (nrow(medal_standings_live) > 0) {
   medal_standings <- medal_standings_live %>%
     mutate(
       rank = ifelse(is.na(rank), row_number(), rank),
@@ -248,59 +283,28 @@ if (!is.null(medal_standings_live)) {
     arrange(rank, desc(total), desc(gold), desc(silver)) %>%
     select(rank, country, flag, gold, silver, bronze, total) %>%
     slice_head(n = 10)
-} else if (olympics_started) {
-  # During/after Olympics - show simulated progress
-  standings_progress_pct <- current_day / total_days
-  set.seed(2026)
-  medal_standings <- tibble(
-    country = c("Norway", "Germany", "USA", "Canada", "Netherlands",
-                "Sweden", "Austria", "Switzerland", "Italy", "France"),
-    flag = c("🇳🇴", "🇩🇪", "🇺🇸", "🇨🇦", "🇳🇱", "🇸🇪", "🇦🇹", "🇨🇭", "🇮🇹", "🇫🇷"),
-    # Predicted totals for each country (based on historical performance)
-    pred_gold = c(16, 12, predicted_gold, 8, 8, 8, 7, 6, 5, 5),
-    pred_silver = c(10, 10, predicted_silver, 10, 7, 6, 8, 6, 5, 5),
-    pred_bronze = c(12, 8, predicted_bronze, 10, 6, 8, 6, 7, 6, 6)
-  ) %>%
-    rowwise() %>%
-    mutate(
-      gold = round(pred_gold * standings_progress_pct * runif(1, 0.7, 1.1)),
-      silver = round(pred_silver * standings_progress_pct * runif(1, 0.7, 1.1)),
-      bronze = round(pred_bronze * standings_progress_pct * runif(1, 0.7, 1.1))
-    ) %>%
-    ungroup() %>%
-    # Override USA with actual tracked values
-    mutate(
-      gold = ifelse(country == "USA", usa_current_gold, gold),
-      silver = ifelse(country == "USA", usa_current_silver, silver),
-      bronze = ifelse(country == "USA", usa_current_bronze, bronze)
-    ) %>%
-    mutate(total = gold + silver + bronze) %>%
-    arrange(desc(total), desc(gold), desc(silver)) %>%
-    mutate(rank = row_number()) %>%
-    select(rank, country, flag, gold, silver, bronze, total)
 } else {
-  # Before Olympics - all countries have 0 medals
+  # No live data available — show empty standings with a note
   medal_standings <- tibble(
-    rank = 1:10,
-    country = c("Norway", "Germany", "USA", "Canada", "Netherlands",
-                "Sweden", "Austria", "Switzerland", "Italy", "France"),
-    flag = c("🇳🇴", "🇩🇪", "🇺🇸", "🇨🇦", "🇳🇱", "🇸🇪", "🇦🇹", "🇨🇭", "🇮🇹", "🇫🇷"),
-    gold = rep(0, 10),
-    silver = rep(0, 10),
-    bronze = rep(0, 10),
-    total = rep(0, 10)
+    rank = integer(),
+    country = character(),
+    flag = character(),
+    gold = integer(),
+    silver = integer(),
+    bronze = integer(),
+    total = integer()
   )
 }
 
-# Medals awarded so far (simulated)
-if (olympics_started) {
-  medals_awarded_gold <- round(total_gold * (current_day / total_days) * 0.9)
-  medals_awarded_silver <- medals_awarded_gold
-  medals_awarded_bronze <- medals_awarded_gold
+# Medals awarded: derive from live standings when available
+if (nrow(medal_standings_live) > 0) {
+  medals_awarded_gold   <- sum(medal_standings_live$gold,   na.rm = TRUE)
+  medals_awarded_silver <- sum(medal_standings_live$silver, na.rm = TRUE)
+  medals_awarded_bronze <- sum(medal_standings_live$bronze, na.rm = TRUE)
 } else {
-  medals_awarded_gold <- 0
-  medals_awarded_silver <- 0
-  medals_awarded_bronze <- 0
+  medals_awarded_gold   <- 0L
+  medals_awarded_silver <- 0L
+  medals_awarded_bronze <- 0L
 }
 medals_awarded_total <- medals_awarded_gold + medals_awarded_silver + medals_awarded_bronze
 medals_remaining <- total_medals - medals_awarded_total
@@ -452,10 +456,14 @@ usa_trend_model <- lm(total ~ year, data = usa_history)
 trend_prediction <- predict(usa_trend_model, newdata = tibble(year = 2026))
 trend_prediction_rounded <- round(trend_prediction)
 
-# Calculate if USA is on pace (during Olympics)
-on_pace_status <- if (olympics_started & !olympics_ended) {
+# Calculate if USA is on pace (during Olympics) — only meaningful with real data
+on_pace_status <- if (!api_data_available) {
+  "Live data unavailable"
+} else if (olympics_started & !olympics_ended) {
   expected_at_this_point <- predicted_total * (current_day / total_days)
   if (usa_current_total >= expected_at_this_point) "On Track" else "Behind Pace"
+} else if (olympics_ended) {
+  "Olympics concluded"
 } else {
   "Not Started"
 }
@@ -595,97 +603,46 @@ whatif_scenarios <- tibble(
 # USA INDIVIDUAL MEDAL RESULTS
 # ============================================
 
-# Every medal won by the USA at the 2026 Winter Olympics
-# During the Games this simulates results; after the Games it represents final results
+# Fetch USA medal results from the live Olympics API
 usa_medal_results <- tibble(
-  date = as.Date(c(
-    "2026-02-07", "2026-02-07",
-    "2026-02-08", "2026-02-08",
-    "2026-02-09", "2026-02-09",
-    "2026-02-10", "2026-02-10", "2026-02-10",
-    "2026-02-11", "2026-02-11",
-    "2026-02-12", "2026-02-12",
-    "2026-02-13", "2026-02-13",
-    "2026-02-14", "2026-02-14", "2026-02-14",
-    "2026-02-15",
-    "2026-02-16", "2026-02-16",
-    "2026-02-17",
-    "2026-02-18", "2026-02-18",
-    "2026-02-19", "2026-02-19",
-    "2026-02-20", "2026-02-20"
-  )),
-  sport = c(
-    "Figure Skating", "Short Track",
-    "Snowboard", "Freestyle Skiing",
-    "Snowboard", "Skeleton",
-    "Speed Skating", "Freestyle Skiing", "Alpine Skiing",
-    "Bobsled", "Cross-Country Skiing",
-    "Short Track", "Freestyle Skiing",
-    "Freestyle Skiing", "Luge",
-    "Snowboard", "Skeleton", "Figure Skating",
-    "Speed Skating",
-    "Bobsled", "Snowboard",
-    "Alpine Skiing",
-    "Ice Hockey", "Freestyle Skiing",
-    "Speed Skating", "Alpine Skiing",
-    "Figure Skating", "Ice Hockey"
-  ),
-  event = c(
-    "Mixed Team Event", "1500m Men",
-    "Slopestyle Men", "Moguls Women",
-    "Slopestyle Women", "Men's Skeleton",
-    "5000m Men", "Aerials Mixed Team", "Super-G Women",
-    "Two-Man Bobsled", "Sprint Free Women",
-    "1000m Women", "Slopestyle Men",
-    "Halfpipe Women", "Team Relay",
-    "Halfpipe Women", "Women's Skeleton", "Pairs Free Skate",
-    "1500m Women",
-    "Four-Man Bobsled", "Big Air Men",
-    "Slalom Women",
-    "Women's Gold Medal Game", "Halfpipe Men",
-    "Team Pursuit Women", "Giant Slalom Men",
-    "Women's Free Skate", "Men's Gold Medal Game"
-  ),
-  athlete = c(
-    "Team USA", "Andrew Heo",
-    "Dusty Henricksen", "Jaelin Kauf",
-    "Julia Marino", "Andrew Blaser",
-    "Jordan Stolz", "Team USA", "Mikaela Shiffrin",
-    "Frank Del Duca / Charlie Volker", "Jessie Diggins",
-    "Kristen Santos-Griswold", "Alex Hall",
-    "Hanna Faulhaber", "Team USA",
-    "Chloe Kim", "Katie Uhlaender", "Alexa Knierim / Brandon Frazier",
-    "Brittany Bowe",
-    "Hunter Church / crew", "Chris Corning",
-    "Mikaela Shiffrin",
-    "Team USA", "Aaron Blunck",
-    "Team USA", "River Radamus",
-    "Isabeau Levito", "Team USA"
-  ),
-  medal = c(
-    "Gold", "Bronze",
-    "Gold", "Silver",
-    "Silver", "Bronze",
-    "Gold", "Silver", "Bronze",
-    "Silver", "Silver",
-    "Gold", "Silver",
-    "Gold", "Bronze",
-    "Gold", "Bronze", "Silver",
-    "Silver",
-    "Gold", "Bronze",
-    "Bronze",
-    "Gold", "Silver",
-    "Bronze", "Bronze",
-    "Gold", "Silver"
-  )
-) %>%
-  # Only show medals up through the current day of the Olympics
-  filter(
-    if (olympics_started & !olympics_ended) date <= today
-    else if (olympics_ended) TRUE
-    else FALSE
-  ) %>%
-  arrange(date, sport)
+  date    = as.Date(character()),
+  sport   = character(),
+  event   = character(),
+  athlete = character(),
+  medal   = character()
+)
+
+results_api <- fetch_json_any(c(
+  paste0(olympics_api_bases, "/Results?$filter=NOC eq 'USA'"),
+  paste0(olympics_api_bases, "/Medallists?$filter=NOC eq 'USA'"),
+  paste0(olympics_api_bases, "/MedalResults?$filter=Country eq 'USA'")
+))
+
+if (!is.null(results_api)) {
+  res_raw <- if ("value" %in% names(results_api)) as_tibble(results_api$value)
+             else if (is.data.frame(results_api)) as_tibble(results_api)
+             else NULL
+  if (!is.null(res_raw) && nrow(res_raw) > 0) {
+    date_field    <- extract_field(res_raw, c("Date", "EventDate", "date", "CompetitionDate"))
+    sport_field   <- extract_field(res_raw, c("Sport", "Discipline", "sport"))
+    event_field   <- extract_field(res_raw, c("Event", "EventName", "Name", "event"))
+    athlete_field <- extract_field(res_raw, c("Athlete", "AthleteFullName", "Name", "athlete", "Competitor"))
+    medal_field   <- extract_field(res_raw, c("Medal", "MedalType", "medal", "MedalCode"))
+    if (!is.null(date_field) && !is.null(medal_field)) {
+      usa_medal_results <- tibble(
+        date    = as.Date(substr(as.character(date_field), 1, 10)),
+        sport   = if (is.null(sport_field)) NA_character_ else as.character(sport_field),
+        event   = if (is.null(event_field)) NA_character_ else as.character(event_field),
+        athlete = if (is.null(athlete_field)) NA_character_ else as.character(athlete_field),
+        medal   = as.character(medal_field)
+      ) %>%
+        filter(!is.na(date), !is.na(medal)) %>%
+        filter(medal %in% c("Gold", "Silver", "Bronze", "GOLD", "SILVER", "BRONZE")) %>%
+        mutate(medal = str_to_title(medal)) %>%
+        arrange(date, sport)
+    }
+  }
+}
 ```
 
 ```{=html}
@@ -807,9 +764,15 @@ list(
 #| icon: award-fill
 #| color: success
 
-# Before Olympics, show "--" since no one has medals yet
-usa_rank <- medal_standings %>% filter(country == "USA") %>% pull(rank)
-rank_display <- ifelse(olympics_started, paste("#", usa_rank), "--")
+# Show USA rank from live standings; "--" when data is unavailable
+usa_rank_row <- medal_standings %>% filter(country == "USA")
+rank_display <- if (nrow(usa_rank_row) > 0) {
+  paste("#", usa_rank_row$rank[1])
+} else if (olympics_started) {
+  "--"
+} else {
+  "--"
+}
 
 list(
   value = rank_display
@@ -909,34 +872,38 @@ plot_ly(data = usa_history_long, x = ~year, y = ~count, color = ~medal,
 ```{r}
 #| title: "Medal Standings"
 
-medal_standings %>%
-  mutate(
-    Country = paste(flag, country)
-  ) %>%
-  select(Rank = rank, Country, Gold = gold, Silver = silver, Bronze = bronze, Total = total) %>%
-  gt() %>%
-  cols_align(align = "center", columns = c(Rank, Gold, Silver, Bronze, Total)) %>%
-  cols_align(align = "left", columns = Country) %>%
-  tab_style(
-    style = cell_fill(color = "#e3f2fd"),
-    locations = cells_body(rows = Country == "🇺🇸 USA")
-  ) %>%
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_body(rows = Country == "🇺🇸 USA")
-  ) %>%
-  cols_width(
-    Rank ~ px(50),
-    Country ~ px(140),
-    Gold ~ px(60),
-    Silver ~ px(60),
-    Bronze ~ px(60),
-    Total ~ px(60)
-  ) %>%
-  tab_options(
-    table.font.size = px(13),
-    data_row.padding = px(6)
-  )
+if (nrow(medal_standings) > 0) {
+  medal_standings %>%
+    mutate(
+      Country = paste(flag, country)
+    ) %>%
+    select(Rank = rank, Country, Gold = gold, Silver = silver, Bronze = bronze, Total = total) %>%
+    gt() %>%
+    cols_align(align = "center", columns = c(Rank, Gold, Silver, Bronze, Total)) %>%
+    cols_align(align = "left", columns = Country) %>%
+    tab_style(
+      style = cell_fill(color = "#e3f2fd"),
+      locations = cells_body(rows = Country == "🇺🇸 USA")
+    ) %>%
+    tab_style(
+      style = cell_text(weight = "bold"),
+      locations = cells_body(rows = Country == "🇺🇸 USA")
+    ) %>%
+    cols_width(
+      Rank ~ px(50),
+      Country ~ px(140),
+      Gold ~ px(60),
+      Silver ~ px(60),
+      Bronze ~ px(60),
+      Total ~ px(60)
+    ) %>%
+    tab_options(
+      table.font.size = px(13),
+      data_row.padding = px(6)
+    )
+} else {
+  cat("Live medal standings are not yet available. Check back when the Olympics API is accessible.")
+}
 ```
 
 ### Row {height=40%}
@@ -1105,28 +1072,32 @@ events_by_sport %>%
 ```{r}
 #| title: "Upcoming Events"
 
-upcoming_events %>%
-  mutate(
-    Date = format(date, "%a, %b %d"),
-    Time = time,
-    `Medal Event` = ifelse(medals, "🏅 Yes", ""),
-    `USA Contender` = ifelse(usa_contender, "🇺🇸 Yes", "")
-  ) %>%
-  select(Date, Time, Sport = sport, Event = event, `Medal Event`, `USA Contender`) %>%
-  gt() %>%
-  cols_align(align = "center", columns = c(Time, `Medal Event`, `USA Contender`)) %>%
-  tab_style(
-    style = cell_fill(color = "#fff8e1"),
-    locations = cells_body(rows = `Medal Event` == "🏅 Yes")
-  ) %>%
-  tab_style(
-    style = cell_fill(color = "#e3f2fd"),
-    locations = cells_body(rows = `USA Contender` == "🇺🇸 Yes" & `Medal Event` == "🏅 Yes")
-  ) %>%
-  tab_options(
-    table.font.size = px(12),
-    data_row.padding = px(6)
-  )
+if (nrow(upcoming_events) > 0) {
+  upcoming_events %>%
+    mutate(
+      Date = format(date, "%a, %b %d"),
+      Time = time,
+      `Medal Event` = ifelse(!is.na(medals) & medals, "🏅 Yes", ""),
+      `USA Contender` = ifelse(!is.na(usa_contender) & usa_contender, "🇺🇸 Yes", "")
+    ) %>%
+    select(Date, Time, Sport = sport, Event = event, `Medal Event`, `USA Contender`) %>%
+    gt() %>%
+    cols_align(align = "center", columns = c(Time, `Medal Event`, `USA Contender`)) %>%
+    tab_style(
+      style = cell_fill(color = "#fff8e1"),
+      locations = cells_body(rows = `Medal Event` == "🏅 Yes")
+    ) %>%
+    tab_style(
+      style = cell_fill(color = "#e3f2fd"),
+      locations = cells_body(rows = `USA Contender` == "🇺🇸 Yes" & `Medal Event` == "🏅 Yes")
+    ) %>%
+    tab_options(
+      table.font.size = px(12),
+      data_row.padding = px(6)
+    )
+} else {
+  cat("Live event schedule is not available. Schedule data will appear here when the Olympics API is accessible.")
+}
 ```
 
 ## Column {width=45%}
@@ -1977,8 +1948,10 @@ if (nrow(usa_medal_results) > 0) {
       table.font.size = px(13),
       data_row.padding = px(7)
     )
-} else {
+} else if (!olympics_started) {
   cat("The Olympics have not started yet. Medal results will appear here once competition begins.")
+} else {
+  cat("Live medal results are not yet available. Data will populate here as the Olympics API becomes accessible.")
 }
 ```
 
