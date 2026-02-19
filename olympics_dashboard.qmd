@@ -2121,6 +2121,173 @@ if (nrow(usa_medal_results) > 0) {
 }
 ```
 
+# Medal Map
+
+## Column {width=60%}
+
+### Row
+
+```{r}
+#| title: "Global Medal Distribution"
+#| padding: 0
+
+# Mapping from NOC codes and country names to ISO-3 codes for the choropleth map
+country_iso_map <- tibble(
+  noc       = c("USA", "NOR", "GER", "CAN", "NED", "SWE", "AUT", "SUI",
+                "ITA", "FRA", "CHN", "JPN", "KOR"),
+  iso3      = c("USA", "NOR", "DEU", "CAN", "NLD", "SWE", "AUT", "CHE",
+                "ITA", "FRA", "CHN", "JPN", "KOR"),
+  name_long = c("USA", "Norway", "Germany", "Canada", "Netherlands", "Sweden",
+                "Austria", "Switzerland", "Italy", "France", "China", "Japan",
+                "South Korea")
+)
+
+if (api_data_available && nrow(medal_standings_live) > 0) {
+  medal_map_data <- medal_standings_live %>%
+    inner_join(country_iso_map %>% select(noc, iso3, name_long),
+               by = c("country" = "noc")) %>%
+    select(country = name_long, iso3, gold, silver, bronze, total, flag)
+  map_source_label <- "Live Standings"
+} else {
+  medal_map_data <- country_predictions %>%
+    inner_join(country_iso_map %>% select(name_long, iso3),
+               by = c("country" = "name_long")) %>%
+    select(country, iso3, gold = pred_gold, silver = pred_silver,
+           bronze = pred_bronze, total = pred_total, flag)
+  map_source_label <- "2026 Projections"
+}
+
+medal_map_data <- medal_map_data %>%
+  mutate(
+    hover_text = paste0(
+      "<b>", flag, " ", country, "</b><br>",
+      "\U0001F947 Gold: ", gold, "<br>",
+      "\U0001F948 Silver: ", silver, "<br>",
+      "\U0001F949 Bronze: ", bronze, "<br>",
+      "<b>Total: ", total, "</b>"
+    )
+  )
+
+max_medals <- max(medal_map_data$total, na.rm = TRUE)
+
+plot_geo(medal_map_data, locations = ~iso3, locationmode = "ISO-3") %>%
+  add_trace(
+    z          = ~total,
+    text       = ~hover_text,
+    hoverinfo  = "text",
+    colorscale = list(
+      c(0,   "rgba(220,230,245,0.4)"),
+      c(0.2, "#7aacd6"),
+      c(0.5, "#3C7FC4"),
+      c(0.8, "#1a4a8e"),
+      c(1,   "#0a1f50")
+    ),
+    colorbar = list(
+      title     = list(text = "Total<br>Medals"),
+      thickness = 14,
+      len       = 0.55,
+      x         = 1.01
+    ),
+    marker = list(line = list(color = "rgba(200,200,200,0.4)", width = 0.5)),
+    zmin = 0,
+    zmax = max_medals
+  ) %>%
+  layout(
+    title = list(
+      text = paste0("2026 Winter Olympics \u2014 ", map_source_label),
+      font = list(size = 13)
+    ),
+    geo = list(
+      showframe      = FALSE,
+      showcoastlines = TRUE,
+      coastlinecolor = "rgba(160,160,160,0.4)",
+      showland       = TRUE,
+      landcolor      = "rgba(230,230,230,0.25)",
+      showocean      = TRUE,
+      oceancolor     = "rgba(200,220,240,0.18)",
+      showlakes      = FALSE,
+      showrivers     = FALSE,
+      projection     = list(type = "natural earth"),
+      bgcolor        = "rgba(0,0,0,0)"
+    ),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    margin = list(t = 40, b = 5, l = 0, r = 30)
+  )
+```
+
+## Column {width=40%}
+
+### Row {height=55%}
+
+```{r}
+#| title: "Medal Tally by Country"
+#| padding: 0
+
+medal_map_long <- medal_map_data %>%
+  arrange(desc(total)) %>%
+  pivot_longer(cols = c(bronze, silver, gold),
+               names_to  = "medal_type",
+               values_to = "count") %>%
+  mutate(medal_type = factor(medal_type,
+                             levels = c("bronze", "silver", "gold"),
+                             labels = c("Bronze", "Silver", "Gold")))
+
+plot_ly(
+  data        = medal_map_long,
+  y           = ~reorder(paste(flag, country), total),
+  x           = ~count,
+  color       = ~medal_type,
+  colors      = c("Gold" = "#FFD700", "Silver" = "#C0C0C0", "Bronze" = "#CD7F32"),
+  type        = "bar",
+  orientation = "h",
+  text        = ~ifelse(count > 0, as.character(count), ""),
+  textposition     = "inside",
+  insidetextanchor = "middle"
+) %>%
+  layout(
+    barmode = "stack",
+    xaxis   = list(title = "Medals", gridcolor = "rgba(128,128,128,0.2)"),
+    yaxis   = list(title = ""),
+    legend  = list(orientation = "h", y = 1.08, x = 0.5,
+                   xanchor = "center", traceorder = "reversed"),
+    margin  = list(l = 130, r = 10, t = 40, b = 40),
+    paper_bgcolor = "rgba(0,0,0,0)",
+    plot_bgcolor  = "rgba(0,0,0,0)"
+  )
+```
+
+### Row {height=45%}
+
+```{r}
+#| title: "Top Medal Countries"
+
+medal_map_data %>%
+  arrange(desc(gold), desc(total)) %>%
+  head(8) %>%
+  mutate(Country = paste(flag, country)) %>%
+  select(Country, Gold = gold, Silver = silver, Bronze = bronze, Total = total) %>%
+  gt() %>%
+  cols_align(align = "center", columns = c(Gold, Silver, Bronze, Total)) %>%
+  cols_align(align = "left",   columns = Country) %>%
+  tab_style(
+    style     = list(cell_fill(color = "#FFD70022"), cell_text(weight = "bold")),
+    locations = cells_body(rows = 1)
+  ) %>%
+  data_color(
+    columns = Total,
+    palette = c("#f0f4ff", "#3C3B6E")
+  ) %>%
+  tab_style(
+    style     = cell_text(color = "#B8860B", weight = "bold"),
+    locations = cells_body(columns = Gold)
+  ) %>%
+  tab_options(
+    table.font.size           = px(13),
+    data_row.padding          = px(8),
+    column_labels.font.weight = "bold"
+  )
+```
+
 # About
 
 ## Column
@@ -2142,7 +2309,8 @@ cat("- **Event schedule** with USA medal opportunities highlighted\n")
 cat("- **Medal efficiency analysis** comparing medals per capita, per GDP, and per athlete\n")
 cat("- **Records & milestones** for Winter Olympics history and USA achievements\n")
 cat("- **What-if scenarios** exploring different outcome paths for Team USA\n")
-cat("- **Dark mode toggle** for comfortable viewing in any lighting condition\n\n")
+cat("- **Dark mode toggle** for comfortable viewing in any lighting condition\n")
+cat("- **World medal map** showing global medal distribution via interactive choropleth\n\n")
 cat("### Predictive Models\n\n")
 cat("1. **Weighted Historical Average**: Recent Olympics weighted more heavily\n")
 cat("2. **Monte Carlo Simulation**: 10,000 simulations for probability distributions\n")
